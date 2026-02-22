@@ -1,20 +1,27 @@
-import { Plus, Mic, ChevronDown } from 'lucide-react'
+import { Mic, ChevronDown, Send } from 'lucide-react'
 import { PlaceholdersAndVanishInput } from './components/ui/placeholders-and-vanish-input'
 import { Sidebar } from './components/Sidebar'
 import { ApiSettingsPage } from './components/ApiSettingsPage'
 import { ChatView } from './components/ChatView'
+import { AuthScreen } from './components/AuthScreen'
+import { useAuth } from './lib/AuthContext'
 import { useState, useRef, useEffect } from 'react'
 import { useApiKeyStore, getModelFamily, type ApiProvider } from './lib/apiKeyStore'
+import { ProviderIcons } from './components/icons/ProviderIcons'
+import { ManageChats } from './components/ManageChats'
 
-type ViewState = 'home' | 'settings' | 'chat'
+type ViewState = 'home' | 'settings' | 'chat' | 'manage-chats'
 
 function App() {
+    const { user, loading } = useAuth()
     const { providers } = useApiKeyStore()
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const [view, setView] = useState<ViewState>('home')
     const [selectedProvider, setSelectedProvider] = useState<ApiProvider | null>(null)
     const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
     const [pendingMessage, setPendingMessage] = useState('')
+    const [activeChatId, setActiveChatId] = useState<string | null>(null)
+    const [inputValue, setInputValue] = useState('')
     const dropdownRef = useRef<HTMLDivElement>(null)
 
     // Auto-select first provider if none selected
@@ -45,8 +52,8 @@ function App() {
         "Life lessons from kratos",
     ];
 
-    const handleChange = (_e: React.ChangeEvent<HTMLInputElement>) => {
-        // We capture value from the input's internal state via ref
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setInputValue(e.target.value);
     };
 
     const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -64,8 +71,22 @@ function App() {
         }
 
         setPendingMessage(value);
+        setActiveChatId(null);
         setView('chat');
+        setInputValue('');
     };
+
+    if (loading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-black">
+                <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+            </div>
+        )
+    }
+
+    if (!user) {
+        return <AuthScreen />
+    }
 
     // ── Settings View ──
     if (view === 'settings') {
@@ -75,27 +96,53 @@ function App() {
                     isOpen={isSidebarOpen}
                     onClose={() => setIsSidebarOpen(false)}
                     setView={setView}
+                    onSelectChat={setActiveChatId}
                 />
                 <ApiSettingsPage onBack={() => setView('home')} onOpenSidebar={() => setIsSidebarOpen(true)} />
             </div>
         )
     }
 
-    // ── Chat View ──
-    if (view === 'chat' && selectedProvider) {
+    // ── Manage Chats View ──
+    if (view === 'manage-chats') {
         return (
             <div className="flex flex-col min-h-screen bg-black">
                 <Sidebar
                     isOpen={isSidebarOpen}
                     onClose={() => setIsSidebarOpen(false)}
                     setView={setView}
+                    onSelectChat={setActiveChatId}
+                />
+                <ManageChats
+                    onBack={() => setView('home')}
+                    onOpenSidebar={() => setIsSidebarOpen(true)}
+                    onSelectChat={(id) => {
+                        setActiveChatId(id);
+                        setView('chat');
+                    }}
+                />
+            </div>
+        )
+    }
+
+    // ── Chat View ──
+    if (view === 'chat' && (selectedProvider || activeChatId)) {
+        return (
+            <div className="flex flex-col h-screen bg-black overflow-hidden relative">
+                <Sidebar
+                    isOpen={isSidebarOpen}
+                    onClose={() => setIsSidebarOpen(false)}
+                    setView={setView}
+                    onSelectChat={setActiveChatId}
                 />
                 <ChatView
                     provider={selectedProvider}
                     initialMessage={pendingMessage}
+                    activeChatId={activeChatId}
                     onBack={() => {
                         setView('home');
                         setPendingMessage('');
+                        setActiveChatId(null);
                     }}
                     onOpenSidebar={() => setIsSidebarOpen(true)}
                 />
@@ -110,24 +157,20 @@ function App() {
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
                 setView={setView}
+                onSelectChat={setActiveChatId}
             />
 
             {/* Ambient Background Spotlight */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-white/[0.06] blur-[120px] rounded-full pointer-events-none" />
 
             {/* Top Bar */}
-            <div className="absolute top-0 w-full p-6 flex justify-between items-center z-10">
-                <div className="w-10 h-10 rounded-xl border border-white/10 flex items-center justify-center glass cursor-pointer z-50">
-                    <svg onClick={() => setIsSidebarOpen(true)} className="w-5 h-5 text-white/80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="absolute top-0 w-full p-6 flex justify-start items-center z-10">
+                <div onClick={() => setIsSidebarOpen(true)} className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center glass-hover cursor-pointer z-50">
+                    <svg className="w-5 h-5 text-white/80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2" strokeWidth="1.5" />
                         <line x1="9" y1="3" x2="9" y2="21" strokeWidth="1.5" />
                     </svg>
                 </div>
-                <button className="flex items-center justify-center w-10 h-10 rounded-full glass hover:bg-white/10 transition-colors overflow-hidden">
-                    <svg className="w-5 h-5 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                    </svg>
-                </button>
             </div>
 
             {/* Main Content */}
@@ -168,18 +211,20 @@ function App() {
                                 <>
                                     <button
                                         onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                                        className="flex items-center gap-2 text-xs text-white/50 hover:text-white/80 transition-colors py-1 px-2 rounded-lg hover:bg-white/5"
+                                        className="flex items-center gap-2 text-xs text-white/50 hover:text-white/80 transition-colors py-1.5 px-3 rounded-full hover:bg-white/5"
                                     >
-                                        <span
-                                            className="w-1.5 h-1.5 rounded-full shadow-[0_0_6px_currentColor]"
-                                            style={{ backgroundColor: getModelFamily(selectedProvider.family).color }}
-                                        />
+                                        {ProviderIcons[selectedProvider.family as keyof typeof ProviderIcons]
+                                            ? ProviderIcons[selectedProvider.family as keyof typeof ProviderIcons]({ className: "w-3 h-3 text-white/80" })
+                                            : <span
+                                                className="w-1.5 h-1.5 rounded-full shadow-[0_0_6px_currentColor]"
+                                                style={{ backgroundColor: getModelFamily(selectedProvider.family).color }}
+                                            />}
                                         <span>{selectedProvider.label}</span>
                                         <ChevronDown className={`w-3 h-3 transition-transform ${isModelDropdownOpen ? 'rotate-180' : ''}`} />
                                     </button>
 
                                     {isModelDropdownOpen && (
-                                        <div className="absolute left-0 bottom-full mb-2 w-64 bg-[#111111] border border-white/10 rounded-xl shadow-2xl py-1 z-50 backdrop-blur-xl">
+                                        <div className="absolute left-0 bottom-full mb-2 w-64 bg-[#111111] border border-white/10 rounded-2xl shadow-2xl py-1 z-50 backdrop-blur-xl">
                                             {providers.map((p) => (
                                                 <button
                                                     key={p.id}
@@ -187,16 +232,18 @@ function App() {
                                                         setSelectedProvider(p)
                                                         setIsModelDropdownOpen(false)
                                                     }}
-                                                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${selectedProvider.id === p.id
+                                                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between rounded-full ${selectedProvider.id === p.id
                                                         ? 'text-white bg-white/5'
                                                         : 'text-white/60 hover:text-white hover:bg-white/[0.03]'
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-2">
-                                                        <span
-                                                            className="w-1.5 h-1.5 rounded-full"
-                                                            style={{ backgroundColor: getModelFamily(p.family).color }}
-                                                        />
+                                                        {ProviderIcons[p.family as keyof typeof ProviderIcons]
+                                                            ? ProviderIcons[p.family as keyof typeof ProviderIcons]({ className: "w-3 h-3 text-white/80" })
+                                                            : <span
+                                                                className="w-1.5 h-1.5 rounded-full"
+                                                                style={{ backgroundColor: getModelFamily(p.family).color }}
+                                                            />}
                                                         <span>{p.label}</span>
                                                     </div>
                                                     {selectedProvider.id === p.id && (
@@ -220,14 +267,12 @@ function App() {
                     </div>
 
                     {/* Glowing Input Box */}
-                    <div className="relative w-full rounded-[24px]">
-                        <div className="w-full rounded-[24px] bg-[#111111] border border-white/[0.06]">
+                    <div className="relative w-full rounded-full">
+                        <div className="w-full rounded-full bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-2xl">
                             <div className="flex items-center gap-3 px-5 py-3">
-                                <button className="text-textMuted hover:text-white transition-colors shrink-0">
-                                    <Plus className="w-5 h-5 opacity-70" />
-                                </button>
 
-                                <div className="h-4 w-px bg-white/10 mx-1 shrink-0" />
+
+
 
                                 <div className="flex-1 overflow-hidden">
                                     <PlaceholdersAndVanishInput
@@ -237,8 +282,15 @@ function App() {
                                     />
                                 </div>
 
-                                <button className="text-textMuted hover:text-white transition-colors shrink-0">
-                                    <Mic className="w-[18px] h-[18px] opacity-70" />
+                                <button
+                                    className="text-textMuted hover:text-white transition-colors shrink-0"
+                                    type={inputValue.trim() ? "submit" : "button"}
+                                >
+                                    {inputValue.trim() ? (
+                                        <Send className="w-[18px] h-[18px] opacity-70" />
+                                    ) : (
+                                        <Mic className="w-[18px] h-[18px] opacity-70" />
+                                    )}
                                 </button>
                             </div>
                         </div>

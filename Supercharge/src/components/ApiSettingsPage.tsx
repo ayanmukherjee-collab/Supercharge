@@ -1,4 +1,4 @@
-import { ArrowLeft, Menu } from 'lucide-react';
+import { ArrowLeft, Menu, ExternalLink } from 'lucide-react';
 import { ExpandableCards } from './ui/expandable-cards';
 
 interface ApiSettingsPageProps {
@@ -17,7 +17,7 @@ export function ApiSettingsPage({ onBack, onOpenSidebar }: ApiSettingsPageProps)
                 <div className="flex items-center gap-4">
                     <button
                         onClick={onBack}
-                        className="p-2 -ml-2 rounded-xl hover:bg-white/5 text-white/70 hover:text-white transition-all flex items-center gap-2"
+                        className="p-2 -ml-2 rounded-full hover:bg-white/5 text-white/70 hover:text-white transition-all flex items-center gap-2"
                     >
                         <ArrowLeft className="w-5 h-5" />
                         <span className="hidden sm:inline font-medium text-sm">Back</span>
@@ -28,7 +28,7 @@ export function ApiSettingsPage({ onBack, onOpenSidebar }: ApiSettingsPageProps)
 
                 <button
                     onClick={onOpenSidebar}
-                    className="p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/80 transition-all sm:hidden"
+                    className="p-2 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white/80 transition-all sm:hidden"
                 >
                     <Menu className="w-5 h-5" />
                 </button>
@@ -48,6 +48,27 @@ export function ApiSettingsPage({ onBack, onOpenSidebar }: ApiSettingsPageProps)
                     <ExpandableCards />
                 </div>
                 <div className="border-b border-white/10 mt-6" />
+
+                <div className="p-6 rounded-2xl glass mt-8 relative overflow-hidden group">
+                    {/* Subtle inner glow */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+
+                    <h4 className="text-white font-medium mb-2 flex items-center gap-2 relative z-10">
+                        No API key?
+                    </h4>
+                    <p className="text-sm text-textMuted leading-relaxed mb-4 relative z-10">
+                        Easily get free API from our supported providers — we recommend <strong>OpenRouter</strong> for a unified experience and access to multiple models.
+                    </p>
+                    <a
+                        href="https://openrouter.ai/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black text-sm font-semibold hover:bg-neutral-200 transition-all active:scale-95 w-fit relative z-10"
+                    >
+                        Get Free API Key
+                        <ExternalLink className="w-4 h-4" />
+                    </a>
+                </div>
 
                 <div className="mt-12 pt-8 border-t border-white/5 pb-20">
                     <h3 className="text-sm font-medium text-white/40 uppercase tracking-wider mb-6">Advanced Information</h3>

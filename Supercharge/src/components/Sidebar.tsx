@@ -1,15 +1,21 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, MessageSquare, Settings, LogOut, ChevronDown, List } from 'lucide-react';
 import { useState } from 'react';
+import { useChatHistory } from '../hooks/useChatHistory';
+import { useAuth } from '../lib/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface SidebarProps {
     isOpen: boolean;
     onClose: () => void;
-    setView: (view: 'home' | 'settings' | 'chat') => void;
+    setView: (view: 'home' | 'settings' | 'chat' | 'manage-chats') => void;
+    onSelectChat: (chatId: string | null) => void;
 }
 
-export function Sidebar({ isOpen, onClose, setView }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, setView, onSelectChat }: SidebarProps) {
     const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
+    const { chats } = useChatHistory();
+    const { user } = useAuth();
 
     return (
         <AnimatePresence>
@@ -36,12 +42,13 @@ export function Sidebar({ isOpen, onClose, setView }: SidebarProps) {
                         <div className="p-4">
                             <button
                                 onClick={() => {
-                                    console.log('New chat clicked');
+                                    onSelectChat(null);
+                                    setView('home');
                                     onClose();
                                 }}
-                                className="w-full flex items-center gap-3 px-4 py-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-colors text-white text-sm font-medium shadow-none"
+                                className="w-full flex items-center justify-center gap-3 px-6 py-3.5 rounded-full bg-white text-black font-semibold hover:bg-neutral-200 transition-all shadow-lg shadow-white/5 group"
                             >
-                                <Plus className="w-5 h-5 text-white" />
+                                <Plus className="w-5 h-5 text-black" />
                                 <span>New Chat</span>
                             </button>
                         </div>
@@ -49,7 +56,13 @@ export function Sidebar({ isOpen, onClose, setView }: SidebarProps) {
                         <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-6">
                             {/* Utility Links Section */}
                             <div className="px-2 space-y-1 mt-2">
-                                <button className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors">
+                                <button
+                                    onClick={() => {
+                                        setView('manage-chats');
+                                        onClose();
+                                    }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors"
+                                >
                                     <List className="w-4 h-4 shrink-0 text-white/50" />
                                     <span>Manage Chats</span>
                                 </button>
@@ -58,12 +71,11 @@ export function Sidebar({ isOpen, onClose, setView }: SidebarProps) {
                                         setView('settings');
                                         onClose();
                                     }}
-                                    className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors"
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors"
                                 >
                                     <Settings className="w-4 h-4 shrink-0 text-white/50" />
                                     <div className="flex-1 flex items-center justify-between text-left">
                                         <span>API Settings</span>
-                                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-white/10 border border-white/10 text-white/70">OpenAI</span>
                                     </div>
                                 </button>
                             </div>
@@ -88,23 +100,25 @@ export function Sidebar({ isOpen, onClose, setView }: SidebarProps) {
                                             exit={{ height: 0, opacity: 0 }}
                                             className="overflow-hidden"
                                         >
-                                            <div className="space-y-0.5">
-                                                {/* Mock History Items */}
-                                                <div className="px-2 py-1.5 text-xs text-textMuted font-medium mt-1">Today</div>
-                                                <button className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors truncate">
-                                                    <MessageSquare className="w-4 h-4 shrink-0 text-white/40" />
-                                                    <span className="truncate">React Optimization Tips</span>
-                                                </button>
-                                                <button className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors truncate">
-                                                    <MessageSquare className="w-4 h-4 shrink-0 text-white/40" />
-                                                    <span className="truncate">Explain Quantum Computing</span>
-                                                </button>
-
-                                                <div className="px-2 py-1.5 text-xs text-textMuted font-medium mt-4">Yesterday</div>
-                                                <button className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors truncate">
-                                                    <MessageSquare className="w-4 h-4 shrink-0 text-white/40" />
-                                                    <span className="truncate">Dinner Recipes</span>
-                                                </button>
+                                            <div className="space-y-0.5 mt-2">
+                                                {chats.length === 0 ? (
+                                                    <div className="px-2 py-4 text-xs text-textMuted text-center">No recent chats</div>
+                                                ) : (
+                                                    chats.map(chat => (
+                                                        <button
+                                                            key={chat.id}
+                                                            onClick={() => {
+                                                                onSelectChat(chat.id);
+                                                                setView('chat');
+                                                                onClose();
+                                                            }}
+                                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full hover:bg-white/5 text-sm text-white/80 hover:text-white transition-colors truncate"
+                                                        >
+                                                            <MessageSquare className="w-4 h-4 shrink-0 text-white/40" />
+                                                            <span className="truncate">{chat.title}</span>
+                                                        </button>
+                                                    ))
+                                                )}
                                             </div>
                                         </motion.div>
                                     )}
@@ -116,13 +130,28 @@ export function Sidebar({ isOpen, onClose, setView }: SidebarProps) {
                         <div className="p-4 border-t border-white/10">
                             <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 backdrop-blur-xl">
                                 <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 shrink-0" />
+                                    {user?.user_metadata?.avatar_url ? (
+                                        <img
+                                            src={user.user_metadata.avatar_url}
+                                            alt="Profile"
+                                            className="w-8 h-8 rounded-full border border-white/20 shrink-0"
+                                        />
+                                    ) : (
+                                        <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 shrink-0 flex items-center justify-center text-white/50 font-bold uppercase overflow-hidden">
+                                            {user?.user_metadata?.full_name?.[0] || user?.email?.[0] || 'U'}
+                                        </div>
+                                    )}
                                     <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-medium text-white truncate">User Name</div>
-                                        <div className="text-xs text-textMuted truncate">user@example.com</div>
+                                        <div className="text-sm font-medium text-white truncate">
+                                            {user?.user_metadata?.full_name || 'Profile'}
+                                        </div>
+                                        <div className="text-xs text-textMuted truncate">{user?.email || 'user@example.com'}</div>
                                     </div>
                                 </div>
-                                <button className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 text-sm text-textMuted hover:text-white transition-all">
+                                <button
+                                    onClick={() => supabase.auth.signOut()}
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 text-sm text-textMuted hover:text-white transition-all"
+                                >
                                     <LogOut className="w-4 h-4" />
                                     <span>Sign Out</span>
                                 </button>

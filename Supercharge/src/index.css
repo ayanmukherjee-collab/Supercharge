@@ -5,6 +5,9 @@
 @layer base {
   body {
     @apply bg-backgroundPrimary text-textPrimary;
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
   }
 }
 
@@ -15,6 +18,10 @@
 
   .glass-hover {
     @apply hover:bg-black/30 hover:border-accentPrimary/40 transition-all duration-200;
+  }
+
+  .glass-footer {
+    @apply bg-black/60 backdrop-blur-3xl border-t border-white/5;
   }
 
   .animate-blur-fade {

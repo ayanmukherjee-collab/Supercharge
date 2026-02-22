@@ -13,6 +13,7 @@ import {
     type ApiProvider,
     type SourceType,
 } from "../../lib/apiKeyStore";
+import { ProviderIcons } from "../icons/ProviderIcons";
 
 export function ExpandableCards() {
     const { providers, addProvider, updateProvider, deleteProvider } = useApiKeyStore();
@@ -105,15 +106,10 @@ export function ExpandableCards() {
                             className={`py-4 px-2 flex items-center gap-4 hover:bg-white/[0.03] cursor-pointer transition-colors rounded-lg ${index < providers.length - 1 ? "border-b border-white/5" : ""
                                 }`}
                         >
-                            <div
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                                style={{
-                                    backgroundColor: family.color + "15",
-                                    border: `1px solid ${family.color}25`,
-                                    color: family.color,
-                                }}
-                            >
-                                {family.name[0]}
+                            <div className="shrink-0 flex items-center justify-center">
+                                {ProviderIcons[family.id as keyof typeof ProviderIcons]
+                                    ? ProviderIcons[family.id as keyof typeof ProviderIcons]({ className: "w-5 h-5 text-white" })
+                                    : <span className="text-sm font-bold text-white">{family.name[0]}</span>}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <motion.h3
@@ -216,17 +212,15 @@ function ExpandedProviderCard({
                             >
                                 {provider.label}
                             </motion.h3>
-                            <motion.p
+                            <motion.div
                                 layoutId={`desc-${provider.id}-${layoutId}`}
-                                className="text-xs mt-1 px-2 py-0.5 rounded-md inline-block font-medium"
-                                style={{
-                                    backgroundColor: family.color + "15",
-                                    color: family.color,
-                                    border: `1px solid ${family.color}25`,
-                                }}
+                                className="mt-2.5 inline-flex items-center gap-2"
                             >
-                                {family.name}
-                            </motion.p>
+                                {ProviderIcons[family.id as keyof typeof ProviderIcons]
+                                    ? ProviderIcons[family.id as keyof typeof ProviderIcons]({ className: "w-4 h-4 text-white/90" })
+                                    : <span className="text-sm font-bold text-white/90">{family.name[0]}</span>}
+                                <span className="text-sm font-medium text-white/90">{family.name}</span>
+                            </motion.div>
                         </div>
                         <motion.button
                             layoutId={`btn-${provider.id}-${layoutId}`}
@@ -411,7 +405,7 @@ function AddModelModal({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="relative w-full max-w-[460px] flex flex-col bg-[#111111] border border-white/10 rounded-3xl overflow-hidden shadow-2xl m-4 max-h-[85vh]"
+                className="relative w-full max-w-[460px] flex flex-col glass rounded-3xl overflow-hidden shadow-2xl m-4 max-h-[85vh]"
             >
                 <AnimatePresence mode="wait">
                     {!selectedFamily ? (
@@ -485,7 +479,7 @@ function FamilySelectStep({
                 <h3 className="font-medium text-white text-lg">Add AI Model</h3>
                 <button
                     onClick={onClose}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all"
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-all"
                 >
                     <CloseIcon />
                 </button>
@@ -505,15 +499,10 @@ function FamilySelectStep({
                                 onClick={() => onSelect(family)}
                                 className="flex-1 flex flex-col items-center gap-2 py-3 px-2 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-white/10 transition-all group"
                             >
-                                <div
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
-                                    style={{
-                                        backgroundColor: family.color + "15",
-                                        border: `1px solid ${family.color}25`,
-                                        color: family.color,
-                                    }}
-                                >
-                                    {family.name[0]}
+                                <div className="flex items-center justify-center mb-1">
+                                    {ProviderIcons[family.id as keyof typeof ProviderIcons]
+                                        ? ProviderIcons[family.id as keyof typeof ProviderIcons]({ className: "w-6 h-6 text-white" })
+                                        : <span className="text-lg font-bold text-white">{family.name[0]}</span>}
                                 </div>
                                 <div className="text-center">
                                     <div className="text-xs font-medium text-white/70 group-hover:text-white transition-colors">{family.name}</div>
@@ -534,7 +523,7 @@ function FamilySelectStep({
                         value={search}
                         onChange={(e) => onSearchChange(e.target.value)}
                         placeholder="Search AI models..."
-                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+                        className="w-full bg-white/5 border border-white/10 rounded-full pl-9 pr-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
                     />
                 </div>
             </div>
@@ -581,15 +570,10 @@ function FamilyRow({ family, onSelect }: { family: ModelFamily; onSelect: (f: Mo
             onClick={() => onSelect(family)}
             className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-white/5 transition-colors group text-left"
         >
-            <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0"
-                style={{
-                    backgroundColor: family.color + "12",
-                    border: `1px solid ${family.color}20`,
-                    color: family.color,
-                }}
-            >
-                {family.name[0]}
+            <div className="shrink-0 flex items-center justify-center">
+                {ProviderIcons[family.id as keyof typeof ProviderIcons]
+                    ? ProviderIcons[family.id as keyof typeof ProviderIcons]({ className: "w-5 h-5 text-white" })
+                    : <span className="text-sm font-bold text-white">{family.name[0]}</span>}
             </div>
             <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-white/70 group-hover:text-white transition-colors flex items-center gap-2">
@@ -650,20 +634,15 @@ function ModelConfigStep({
             <div className="flex items-center gap-3 p-6 pb-4">
                 <button
                     onClick={onBack}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all -ml-1"
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-all -ml-1"
                 >
                     <ArrowLeft className="w-4 h-4" />
                 </button>
                 <div className="flex items-center gap-2.5">
-                    <div
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold"
-                        style={{
-                            backgroundColor: family.color + "15",
-                            border: `1px solid ${family.color}25`,
-                            color: family.color,
-                        }}
-                    >
-                        {family.name[0]}
+                    <div className="flex items-center justify-center">
+                        {ProviderIcons[family.id as keyof typeof ProviderIcons]
+                            ? ProviderIcons[family.id as keyof typeof ProviderIcons]({ className: "w-5 h-5 text-white" })
+                            : <span className="text-sm font-bold text-white">{family.name[0]}</span>}
                     </div>
                     <h3 className="font-medium text-white text-lg">{family.name}</h3>
                 </div>
@@ -729,7 +708,7 @@ function ModelConfigStep({
                         <select
                             value={source}
                             onChange={(e) => onSourceChange(e.target.value as SourceType)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 appearance-none cursor-pointer transition-colors"
+                            className="w-full bg-white/5 border border-white/10 rounded-full px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 appearance-none cursor-pointer transition-colors"
                         >
                             {family.sources.map((s) => (
                                 <option
@@ -750,7 +729,7 @@ function ModelConfigStep({
                 <button
                     onClick={onSubmit}
                     disabled={!apiKey.trim()}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium bg-white text-black hover:bg-white/90 transition-all disabled:opacity-30 disabled:cursor-not-allowed mt-2"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-full text-sm font-medium bg-white text-black hover:bg-white/90 transition-all disabled:opacity-30 disabled:cursor-not-allowed mt-2"
                 >
                     <Plus className="w-4 h-4" />
                     <span>Add AI Model</span>
