@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-backgroundPrimary text-textPrimary;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-black/20 backdrop-blur-xl border border-white/10;
+  }
+
+  .glass-hover {
+    @apply hover:bg-black/30 hover:border-accentPrimary/40 transition-all duration-200;
+  }
+}
