@@ -1,11 +1,42 @@
-import { Plus, Mic } from 'lucide-react'
+import { Plus, Mic, ChevronDown } from 'lucide-react'
 import { PlaceholdersAndVanishInput } from './components/ui/placeholders-and-vanish-input'
-
 import { Sidebar } from './components/Sidebar'
-import { useState } from 'react'
+import { ApiSettingsPage } from './components/ApiSettingsPage'
+import { ChatView } from './components/ChatView'
+import { useState, useRef, useEffect } from 'react'
+import { useApiKeyStore, getModelFamily, type ApiProvider } from './lib/apiKeyStore'
+
+type ViewState = 'home' | 'settings' | 'chat'
 
 function App() {
+    const { providers } = useApiKeyStore()
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+    const [view, setView] = useState<ViewState>('home')
+    const [selectedProvider, setSelectedProvider] = useState<ApiProvider | null>(null)
+    const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
+    const [pendingMessage, setPendingMessage] = useState('')
+    const dropdownRef = useRef<HTMLDivElement>(null)
+
+    // Auto-select first provider if none selected
+    useEffect(() => {
+        if (!selectedProvider && providers.length > 0) {
+            setSelectedProvider(providers[0])
+        }
+        // If the selected provider was deleted, fall back
+        if (selectedProvider && !providers.find((p) => p.id === selectedProvider.id)) {
+            setSelectedProvider(providers[0] || null)
+        }
+    }, [providers, selectedProvider])
+
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setIsModelDropdownOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
 
     const placeholders = [
         "Ask anything ...",
@@ -14,22 +45,77 @@ function App() {
         "Life lessons from kratos",
     ];
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        console.log(e.target.value);
-    };
-    const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        console.log("submitted");
+    const handleChange = (_e: React.ChangeEvent<HTMLInputElement>) => {
+        // We capture value from the input's internal state via ref
     };
 
+    const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        // Get value from the input
+        const form = e.currentTarget;
+        const input = form.querySelector('input') as HTMLInputElement;
+        const value = input?.value?.trim();
+        if (!value) return;
+
+        if (!selectedProvider) {
+            // No API key configured — go to settings
+            setView('settings');
+            return;
+        }
+
+        setPendingMessage(value);
+        setView('chat');
+    };
+
+    // ── Settings View ──
+    if (view === 'settings') {
+        return (
+            <div className="flex flex-col min-h-screen bg-black">
+                <Sidebar
+                    isOpen={isSidebarOpen}
+                    onClose={() => setIsSidebarOpen(false)}
+                    setView={setView}
+                />
+                <ApiSettingsPage onBack={() => setView('home')} onOpenSidebar={() => setIsSidebarOpen(true)} />
+            </div>
+        )
+    }
+
+    // ── Chat View ──
+    if (view === 'chat' && selectedProvider) {
+        return (
+            <div className="flex flex-col min-h-screen bg-black">
+                <Sidebar
+                    isOpen={isSidebarOpen}
+                    onClose={() => setIsSidebarOpen(false)}
+                    setView={setView}
+                />
+                <ChatView
+                    provider={selectedProvider}
+                    initialMessage={pendingMessage}
+                    onBack={() => {
+                        setView('home');
+                        setPendingMessage('');
+                    }}
+                    onOpenSidebar={() => setIsSidebarOpen(true)}
+                />
+            </div>
+        )
+    }
+
+    // ── Home View ──
     return (
         <div className="flex flex-col min-h-screen items-center justify-center p-4 relative overflow-hidden">
-            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+            <Sidebar
+                isOpen={isSidebarOpen}
+                onClose={() => setIsSidebarOpen(false)}
+                setView={setView}
+            />
 
             {/* Ambient Background Spotlight */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-white/[0.06] blur-[120px] rounded-full pointer-events-none" />
 
-            {/* Top Bar placeholders */}
+            {/* Top Bar */}
             <div className="absolute top-0 w-full p-6 flex justify-between items-center z-10">
                 <div className="w-10 h-10 rounded-xl border border-white/10 flex items-center justify-center glass cursor-pointer z-50">
                     <svg onClick={() => setIsSidebarOpen(true)} className="w-5 h-5 text-white/80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -74,16 +160,62 @@ function App() {
                 </div>
 
                 {/* Input Area */}
-                <div className="w-full max-w-[640px] flex flex-col gap-3 relative px-4 md:px-0">
-                    {/* Active extensions indicator */}
-                    <div className="flex justify-between items-center px-1">
-                        <div className="flex items-center gap-2 text-[#475569] hover:text-textMuted transition-colors cursor-pointer text-xs shrink-0">
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-                            <span>Unlock more features with the Pro plan.</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[#475569] text-xs shrink-0 bg-white/5 px-2.5 py-1 rounded-full border border-white/5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
-                            <span>Active extensions</span>
+                <div className="w-full max-w-3xl flex flex-col gap-3 relative px-4 md:px-0">
+                    {/* Model Selector */}
+                    <div className="flex items-center px-1" ref={dropdownRef}>
+                        <div className="relative">
+                            {providers.length > 0 && selectedProvider ? (
+                                <>
+                                    <button
+                                        onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                                        className="flex items-center gap-2 text-xs text-white/50 hover:text-white/80 transition-colors py-1 px-2 rounded-lg hover:bg-white/5"
+                                    >
+                                        <span
+                                            className="w-1.5 h-1.5 rounded-full shadow-[0_0_6px_currentColor]"
+                                            style={{ backgroundColor: getModelFamily(selectedProvider.family).color }}
+                                        />
+                                        <span>{selectedProvider.label}</span>
+                                        <ChevronDown className={`w-3 h-3 transition-transform ${isModelDropdownOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {isModelDropdownOpen && (
+                                        <div className="absolute left-0 bottom-full mb-2 w-64 bg-[#111111] border border-white/10 rounded-xl shadow-2xl py-1 z-50 backdrop-blur-xl">
+                                            {providers.map((p) => (
+                                                <button
+                                                    key={p.id}
+                                                    onClick={() => {
+                                                        setSelectedProvider(p)
+                                                        setIsModelDropdownOpen(false)
+                                                    }}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${selectedProvider.id === p.id
+                                                        ? 'text-white bg-white/5'
+                                                        : 'text-white/60 hover:text-white hover:bg-white/[0.03]'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <span
+                                                            className="w-1.5 h-1.5 rounded-full"
+                                                            style={{ backgroundColor: getModelFamily(p.family).color }}
+                                                        />
+                                                        <span>{p.label}</span>
+                                                    </div>
+                                                    {selectedProvider.id === p.id && (
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <button
+                                    onClick={() => setView('settings')}
+                                    className="flex items-center gap-2 text-xs text-amber-400/70 hover:text-amber-400 transition-colors py-1 px-2 rounded-lg hover:bg-white/5"
+                                >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400/50" />
+                                    <span>Add an API key to start chatting</span>
+                                </button>
+                            )}
                         </div>
                     </div>
 

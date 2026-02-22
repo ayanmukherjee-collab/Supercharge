@@ -16,4 +16,22 @@
   .glass-hover {
     @apply hover:bg-black/30 hover:border-accentPrimary/40 transition-all duration-200;
   }
+
+  .animate-blur-fade {
+    animation: blurFadeIn 0.4s ease-out forwards;
+  }
+}
+
+@keyframes blurFadeIn {
+  0% {
+    filter: blur(4px);
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  100% {
+    filter: blur(0);
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

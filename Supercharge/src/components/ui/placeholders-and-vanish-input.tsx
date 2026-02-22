@@ -4,6 +4,19 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 
+const slideUpStyle = `
+@keyframes slideUpChar {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+`;
+
 export function PlaceholdersAndVanishInput({
     placeholders,
     onChange,
@@ -50,6 +63,7 @@ export function PlaceholdersAndVanishInput({
     const inputRef = useRef<HTMLInputElement>(null);
     const [value, setValue] = useState("");
     const [animating, setAnimating] = useState(false);
+    const prevLengthRef = useRef(0);
 
     const draw = useCallback(() => {
         if (!inputRef.current) return;
@@ -177,6 +191,14 @@ export function PlaceholdersAndVanishInput({
         vanishAndSubmit();
         onSubmit && onSubmit(e);
     };
+    const charCount = value.length;
+    const animateFrom = prevLengthRef.current;
+
+    // Update prev length after render
+    useEffect(() => {
+        prevLengthRef.current = value.length;
+    }, [value]);
+
     return (
         <form
             className={cn(
@@ -185,6 +207,7 @@ export function PlaceholdersAndVanishInput({
             )}
             onSubmit={handleSubmit}
         >
+            <style>{slideUpStyle}</style>
             <canvas
                 className={cn(
                     "absolute pointer-events-none  text-base transform scale-50 top-[20%] left-2 sm:left-8 origin-top-left filter invert dark:invert-0 pr-20",
@@ -204,10 +227,33 @@ export function PlaceholdersAndVanishInput({
                 value={value}
                 type="text"
                 className={cn(
-                    "w-full relative text-sm sm:text-base z-50 border-none text-textPrimary bg-transparent h-full rounded-[24px] focus:outline-none focus:ring-0 pl-1",
-                    animating && "text-transparent dark:text-transparent"
+                    "w-full relative text-sm sm:text-base z-50 border-none bg-transparent h-full rounded-[24px] focus:outline-none focus:ring-0 pl-1 caret-white/70",
+                    "text-transparent"
                 )}
             />
+
+            {/* Character overlay with per-char slide-up */}
+            {value && !animating && (
+                <div className="absolute inset-0 flex items-center pointer-events-none pl-1">
+                    <span className="text-sm sm:text-base text-textPrimary whitespace-pre">
+                        {value.split("").map((char, i) => (
+                            <span
+                                key={`${i}-${char}`}
+                                style={
+                                    i >= animateFrom && charCount > animateFrom
+                                        ? {
+                                            display: 'inline-block',
+                                            animation: 'slideUpChar 0.3s ease-out forwards',
+                                        }
+                                        : { display: 'inline-block' }
+                                }
+                            >
+                                {char}
+                            </span>
+                        ))}
+                    </span>
+                </div>
+            )}
 
             <div className="absolute inset-0 flex items-center rounded-full pointer-events-none">
                 <AnimatePresence mode="wait">
