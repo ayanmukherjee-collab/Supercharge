@@ -283,6 +283,20 @@ export function PlaceholdersAndVanishInput({
                     )}
                 </AnimatePresence>
             </div>
+            {/* Custom Send Icon within Form */}
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center shrink-0 z-50">
+                <button
+                    className="text-textMuted hover:text-white transition-colors flex items-center justify-center bg-transparent border-none p-0 cursor-pointer"
+                    type={value.trim() ? "submit" : "button"}
+                    disabled={animating}
+                >
+                    {value.trim() ? (
+                        <svg className="w-[18px] h-[18px] opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
+                    ) : (
+                        <svg className="w-[18px] h-[18px] opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" /></svg>
+                    )}
+                </button>
+            </div>
         </form>
     );
 }

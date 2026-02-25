@@ -1,4 +1,4 @@
-import { Mic, ChevronDown, Send } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { PlaceholdersAndVanishInput } from './components/ui/placeholders-and-vanish-input'
 import { Sidebar } from './components/Sidebar'
 import { ApiSettingsPage } from './components/ApiSettingsPage'
@@ -6,18 +6,18 @@ import { ChatView } from './components/ChatView'
 import { AuthScreen } from './components/AuthScreen'
 import { useAuth } from './lib/AuthContext'
 import { useState, useRef, useEffect } from 'react'
-import { useApiKeyStore, getModelFamily, type ApiProvider } from './lib/apiKeyStore'
+import { useApiKeyStore, getModelFamily } from './lib/apiKeyStore'
 import { ProviderIcons } from './components/icons/ProviderIcons'
 import { ManageChats } from './components/ManageChats'
 
 type ViewState = 'home' | 'settings' | 'chat' | 'manage-chats'
 
 function App() {
-    const { user, loading } = useAuth()
-    const { providers } = useApiKeyStore()
+    const { user, loading, isSkipped } = useAuth()
+    const { providers, activeProviderId, setActiveProviderId } = useApiKeyStore()
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const [view, setView] = useState<ViewState>('home')
-    const [selectedProvider, setSelectedProvider] = useState<ApiProvider | null>(null)
+    const selectedProvider = providers.find(p => p.id === activeProviderId) || providers[0] || null;
     const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
     const [pendingMessage, setPendingMessage] = useState('')
     const [activeChatId, setActiveChatId] = useState<string | null>(null)
@@ -26,14 +26,10 @@ function App() {
 
     // Auto-select first provider if none selected
     useEffect(() => {
-        if (!selectedProvider && providers.length > 0) {
-            setSelectedProvider(providers[0])
+        if (!activeProviderId && providers.length > 0) {
+            setActiveProviderId(providers[0].id)
         }
-        // If the selected provider was deleted, fall back
-        if (selectedProvider && !providers.find((p) => p.id === selectedProvider.id)) {
-            setSelectedProvider(providers[0] || null)
-        }
-    }, [providers, selectedProvider])
+    }, [providers, activeProviderId, setActiveProviderId])
 
     useEffect(() => {
         function handleClickOutside(e: MouseEvent) {
@@ -56,12 +52,12 @@ function App() {
         setInputValue(e.target.value);
     };
 
-    const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        // Get value from the input
-        const form = e.currentTarget;
-        const input = form.querySelector('input') as HTMLInputElement;
-        const value = input?.value?.trim();
+    const onSubmit = (e?: React.FormEvent<HTMLFormElement>) => {
+        if (e && e.preventDefault) e.preventDefault();
+
+        // We now rely purely on tracking the inputValue state since reading DOM elements synchronously 
+        // through synthetic events can sometimes be problematic 
+        const value = inputValue.trim();
         if (!value) return;
 
         if (!selectedProvider) {
@@ -84,7 +80,7 @@ function App() {
         )
     }
 
-    if (!user) {
+    if (!user && !isSkipped) {
         return <AuthScreen />
     }
 
@@ -229,7 +225,7 @@ function App() {
                                                 <button
                                                     key={p.id}
                                                     onClick={() => {
-                                                        setSelectedProvider(p)
+                                                        setActiveProviderId(p.id)
                                                         setIsModelDropdownOpen(false)
                                                     }}
                                                     className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between rounded-full ${selectedProvider.id === p.id
@@ -274,24 +270,13 @@ function App() {
 
 
 
-                                <div className="flex-1 overflow-hidden">
+                                <div className="flex-1 overflow-hidden w-full">
                                     <PlaceholdersAndVanishInput
                                         placeholders={placeholders}
                                         onChange={handleChange}
                                         onSubmit={onSubmit}
                                     />
                                 </div>
-
-                                <button
-                                    className="text-textMuted hover:text-white transition-colors shrink-0"
-                                    type={inputValue.trim() ? "submit" : "button"}
-                                >
-                                    {inputValue.trim() ? (
-                                        <Send className="w-[18px] h-[18px] opacity-70" />
-                                    ) : (
-                                        <Mic className="w-[18px] h-[18px] opacity-70" />
-                                    )}
-                                </button>
                             </div>
                         </div>
                     </div>

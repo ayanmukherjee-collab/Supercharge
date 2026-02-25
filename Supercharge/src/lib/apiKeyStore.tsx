@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, useCallback, useState, type ReactNode } from 'react';
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -101,8 +101,8 @@ export const MODEL_FAMILIES: ModelFamily[] = [
         popular: true,
         description: 'Gemini 2.5 Pro, 2.5 Flash',
         variants: [
-            { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
             { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+            { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
             { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
             { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
         ],
@@ -386,12 +386,25 @@ interface ApiKeyStoreContextValue {
     updateProvider: (provider: ApiProvider) => void;
     deleteProvider: (id: string) => void;
     getProvider: (id: string) => ApiProvider | undefined;
+    activeProviderId: string | null;
+    setActiveProviderId: (id: string | null) => void;
 }
 
 const ApiKeyStoreContext = createContext<ApiKeyStoreContextValue | null>(null);
 
 export function ApiKeyStoreProvider({ children }: { children: ReactNode }) {
     const [providers, dispatch] = useReducer(reducer, [], loadProviders);
+    const [activeProviderId, setActiveProviderId] = useState<string | null>(() => {
+        return localStorage.getItem('supercharge_active_provider') || null;
+    });
+
+    useEffect(() => {
+        if (activeProviderId) {
+            localStorage.setItem('supercharge_active_provider', activeProviderId);
+        } else {
+            localStorage.removeItem('supercharge_active_provider');
+        }
+    }, [activeProviderId]);
 
     useEffect(() => {
         saveProviders(providers);
@@ -400,6 +413,7 @@ export function ApiKeyStoreProvider({ children }: { children: ReactNode }) {
     const addProvider = useCallback((data: Omit<ApiProvider, 'id'>) => {
         const provider: ApiProvider = { ...data, id: crypto.randomUUID() };
         dispatch({ type: 'ADD_PROVIDER', provider });
+        setActiveProviderId(provider.id);
         return provider;
     }, []);
 
@@ -409,6 +423,7 @@ export function ApiKeyStoreProvider({ children }: { children: ReactNode }) {
 
     const deleteProvider = useCallback((id: string) => {
         dispatch({ type: 'DELETE_PROVIDER', id });
+        setActiveProviderId(prev => prev === id ? null : prev);
     }, []);
 
     const getProvider = useCallback(
@@ -417,7 +432,7 @@ export function ApiKeyStoreProvider({ children }: { children: ReactNode }) {
     );
 
     return (
-        <ApiKeyStoreContext.Provider value={{ providers, addProvider, updateProvider, deleteProvider, getProvider }}>
+        <ApiKeyStoreContext.Provider value={{ providers, addProvider, updateProvider, deleteProvider, getProvider, activeProviderId, setActiveProviderId }}>
             {children}
         </ApiKeyStoreContext.Provider>
     );

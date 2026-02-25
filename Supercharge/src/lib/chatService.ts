@@ -50,7 +50,8 @@ async function* streamOpenAICompat(
 
     // OpenRouter requires referer + title headers
     if (source === 'openrouter') {
-        headers['HTTP-Referer'] = window.location.origin + '/';
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        headers['HTTP-Referer'] = isLocalhost ? 'https://supercharge-app.vercel.app/' : window.location.origin + '/';
         headers['X-Title'] = 'Supercharge';
     }
 
@@ -143,7 +144,12 @@ async function* streamGemini(
         }));
 
     const systemInstruction = messages.find((m) => m.role === 'system');
-    const body: Record<string, unknown> = { contents };
+    const body: Record<string, unknown> = {
+        contents,
+        generationConfig: {
+            maxOutputTokens: 8192
+        }
+    };
     if (systemInstruction) {
         body.systemInstruction = { parts: [{ text: systemInstruction.content }] };
     }

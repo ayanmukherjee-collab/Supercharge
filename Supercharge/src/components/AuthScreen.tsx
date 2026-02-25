@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/AuthContext'
 
 export const AuthScreen: React.FC = () => {
+    const { skipLogin } = useAuth()
     const [isLogin, setIsLogin] = useState(true)
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -16,7 +18,7 @@ export const AuthScreen: React.FC = () => {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: window.location.origin
+                    redirectTo: window.location.origin + window.location.pathname
                 }
             })
             if (error) throw error
@@ -145,7 +147,7 @@ export const AuthScreen: React.FC = () => {
                         Continue with Google
                     </button>
 
-                    <div className="mt-4 flex items-center justify-center">
+                    <div className="mt-4 flex items-center justify-center gap-4">
                         <button
                             type="button"
                             onClick={() => {
@@ -156,6 +158,16 @@ export const AuthScreen: React.FC = () => {
                             className="text-xs text-white/50 hover:text-white transition-colors"
                         >
                             {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+                        </button>
+
+                        <div className="w-px h-3 bg-white/20"></div>
+
+                        <button
+                            type="button"
+                            onClick={skipLogin}
+                            className="text-xs text-white/50 hover:text-white transition-colors"
+                        >
+                            Skip for now
                         </button>
                     </div>
                 </div>

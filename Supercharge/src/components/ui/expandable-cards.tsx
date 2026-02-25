@@ -200,7 +200,7 @@ function ExpandedProviderCard({
             <motion.div
                 layoutId={`card-${provider.id}-${layoutId}`}
                 ref={innerRef}
-                className="relative w-full max-w-[460px] flex flex-col bg-[#111111] border border-white/10 rounded-3xl overflow-hidden shadow-2xl m-4"
+                className="relative w-full max-w-[460px] flex flex-col glass rounded-3xl overflow-hidden shadow-2xl m-4"
             >
                 <div className="flex-1 flex flex-col">
                     {/* Header */}
@@ -240,7 +240,7 @@ function ExpandedProviderCard({
                                 type="text"
                                 value={label}
                                 onChange={(e) => setLabel(e.target.value)}
-                                className="mt-1.5 w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 transition-colors"
+                                className="mt-1.5 w-full bg-white/[0.05] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 transition-colors"
                             />
                         </div>
 
@@ -252,7 +252,7 @@ function ExpandedProviderCard({
                                     type={showKey ? "text" : "password"}
                                     value={apiKey}
                                     onChange={(e) => setApiKey(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-white/20 transition-colors pr-10"
+                                    className="w-full bg-white/[0.05] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-white/20 transition-colors pr-10"
                                 />
                                 <button
                                     type="button"
@@ -271,7 +271,7 @@ function ExpandedProviderCard({
                                 <select
                                     value={model}
                                     onChange={(e) => setModel(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 appearance-none cursor-pointer transition-colors"
+                                    className="w-full bg-white/[0.05] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 appearance-none cursor-pointer transition-colors"
                                 >
                                     {family.variants.map((m) => (
                                         <option key={m.value} value={m.value} className="bg-[#111] text-white">
@@ -290,7 +290,7 @@ function ExpandedProviderCard({
                                 <select
                                     value={source}
                                     onChange={(e) => setSource(e.target.value as SourceType)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 appearance-none cursor-pointer transition-colors"
+                                    className="w-full bg-white/[0.05] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 appearance-none cursor-pointer transition-colors"
                                 >
                                     {family.sources.map((s) => (
                                         <option
@@ -310,7 +310,7 @@ function ExpandedProviderCard({
                         {/* Save Button */}
                         <button
                             onClick={handleSave}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-white/10 hover:bg-white/15 text-white border border-white/5 hover:border-white/10 transition-all"
+                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-medium bg-white/[0.05] hover:bg-white/15 text-white border border-white/5 hover:border-white/10 transition-all"
                         >
                             {saved ? (
                                 <>
@@ -327,7 +327,7 @@ function ExpandedProviderCard({
                     <div className="px-6 pb-6 pt-2 mt-auto">
                         <button
                             onClick={onDelete}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-red-400/70 hover:text-red-400 hover:bg-red-500/10 border border-white/5 hover:border-red-500/20 transition-all"
+                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-medium text-red-400/70 hover:text-red-400 hover:bg-red-500/10 border border-white/5 hover:border-red-500/20 transition-all"
                         >
                             <Trash2 className="w-4 h-4" />
                             <span>Delete API Key</span>
@@ -523,7 +523,7 @@ function FamilySelectStep({
                         value={search}
                         onChange={(e) => onSearchChange(e.target.value)}
                         placeholder="Search AI models..."
-                        className="w-full bg-white/5 border border-white/10 rounded-full pl-9 pr-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+                        className="w-full bg-white/[0.05] border border-white/10 rounded-full pl-9 pr-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
                     />
                 </div>
             </div>
@@ -657,7 +657,7 @@ function ModelConfigStep({
                         value={label}
                         onChange={(e) => onLabelChange(e.target.value)}
                         placeholder={family.name}
-                        className="mt-1.5 w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+                        className="mt-1.5 w-full bg-white/[0.05] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
                     />
                 </div>
 
@@ -670,7 +670,7 @@ function ModelConfigStep({
                             value={apiKey}
                             onChange={(e) => onApiKeyChange(e.target.value)}
                             placeholder="Paste your API key here..."
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors pr-10"
+                            className="w-full bg-white/[0.05] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors pr-10"
                         />
                         <button
                             type="button"
@@ -689,7 +689,7 @@ function ModelConfigStep({
                         <select
                             value={model}
                             onChange={(e) => onModelChange(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 appearance-none cursor-pointer transition-colors"
+                            className="w-full bg-white/[0.05] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 appearance-none cursor-pointer transition-colors"
                         >
                             {family.variants.map((m) => (
                                 <option key={m.value} value={m.value} className="bg-[#111] text-white">
@@ -708,7 +708,7 @@ function ModelConfigStep({
                         <select
                             value={source}
                             onChange={(e) => onSourceChange(e.target.value as SourceType)}
-                            className="w-full bg-white/5 border border-white/10 rounded-full px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 appearance-none cursor-pointer transition-colors"
+                            className="w-full bg-white/[0.05] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 appearance-none cursor-pointer transition-colors"
                         >
                             {family.sources.map((s) => (
                                 <option

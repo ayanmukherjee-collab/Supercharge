@@ -55,7 +55,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
     const inputRef = useRef<HTMLInputElement>(null);
     const abortRef = useRef(false);
     const streamFinishedRef = useRef(false);
-    const { providers } = useApiKeyStore();
+    const { providers, activeProviderId, setActiveProviderId } = useApiKeyStore();
     const { fetchMessages, appendMessage, createChat } = useChatHistory();
     const currentChatIdRef = useRef<string | null>(activeChatId);
 
@@ -83,8 +83,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
     }, [activeChatId, fetchMessages]);
 
     // Model selector state within chat
-    // Fall back to first available provider if the passed provider is null
-    const [currentProvider, setCurrentProvider] = useState(provider || providers[0]);
+    const currentProvider = providers.find(p => p.id === activeProviderId) || provider || providers[0] || null;
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
     const modelMenuRef = useRef<HTMLDivElement>(null);
 
@@ -297,7 +296,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                                     <button
                                         key={p.id}
                                         onClick={() => {
-                                            setCurrentProvider(p);
+                                            setActiveProviderId(p.id);
                                             setIsModelMenuOpen(false);
                                         }}
                                         className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between rounded-full ${currentProvider.id === p.id
