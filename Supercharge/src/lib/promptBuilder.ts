@@ -76,7 +76,7 @@ Only use STORE for new nodes. Use UPDATE to overwrite existing ones. Use PATCH f
 Nodes that require conf >= 0.75 minimum — ephemeral or uncertain facts should not be stored.`;
 
 /**
- * Cold-start prompt — no PML overhead.
+ * Cold-start prompt — lighter PML overhead.
  * Used when the user has < 5 active memory nodes (fix #6.3).
  */
 export const COLD_START_PROMPT = `You are a personal AI assistant. Respond helpfully and naturally.
@@ -84,9 +84,12 @@ As you learn about the user, output a MEMORY_OP block at the END of every respon
 \`\`\`MEMORY_OP
 STORE/UPDATE/PATCH/DELETE commands here
 \`\`\`
-Only STORE facts the user stated with clear intent or that are repeated or confirmed. Do not STORE throwaway remarks.
+Only STORE facts the user stated with clear intent. Do not STORE throwaway remarks.
 Use this format: STORE #CAT:Root.Sub [Item|key:val] <GlobalKey:val>
-Categories: pf(preference) ac(action) fc(fact) en(entity) lc(location) pl(plan) wk(work) hl(health) st(state) ep(episode).`;
+Categories: pf(preference) ac(action) fc(fact) en(entity) lc(location) pl(plan) wk(work) hl(health) st(state) ep(episode).
+
+[PML MEMORY CONTEXT]
+{PML_BLOCK}`;
 
 /** Drift reminder appended every N messages (fix #1.4) */
 const DRIFT_REMINDER =
@@ -200,6 +203,13 @@ export function buildSystemPrompt(options: BuildPromptOptions): string {
     const activeNodes = nodes.filter((n) => !n.stale);
     if (activeNodes.length < COLD_START_THRESHOLD) {
         let prompt = COLD_START_PROMPT;
+        if (activeNodes.length > 0) {
+            const pmlBlock = serializePml(activeNodes);
+            prompt = prompt.replace('{PML_BLOCK}', pmlBlock);
+        } else {
+            prompt = prompt.replace('\n\n[PML MEMORY CONTEXT]\n{PML_BLOCK}', '');
+        }
+
         if (conversationLength > 0 && conversationLength % DRIFT_REMINDER_INTERVAL === 0) {
             prompt += DRIFT_REMINDER;
         }
