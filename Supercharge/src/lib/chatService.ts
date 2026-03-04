@@ -8,26 +8,62 @@ export interface ChatMessage {
     content: string;
 }
 
+// ── Token management ──────────────────────────────────────────
+
+/** Default conversation turns (user+assistant pairs) to keep in context */
+const DEFAULT_HISTORY_TURNS = 15;
+
+/** Max tokens the model should output per response — keeps costs and rate limits in check */
+const MAX_OUTPUT_TOKENS = 1024;
+
+/**
+ * Trims the message history to the last `maxTurns` pairs,
+ * always preserving any leading system message.
+ */
+function trimHistory(messages: ChatMessage[], maxTurns: number = DEFAULT_HISTORY_TURNS): ChatMessage[] {
+    const systemMsg = messages[0]?.role === 'system' ? [messages[0]] : [];
+    const chatMsgs = messages.filter((m) => m.role !== 'system');
+
+    // Keep only the last maxTurns * 2 messages (each turn = user + assistant)
+    const maxMsgs = maxTurns * 2;
+    const trimmed = chatMsgs.length > maxMsgs ? chatMsgs.slice(-maxMsgs) : chatMsgs;
+
+    return [...systemMsg, ...trimmed];
+}
+
 // ── Main entry point ───────────────────────────────────────────
 
 export async function* sendMessage(
     provider: ApiProvider,
-    messages: ChatMessage[]
+    messages: ChatMessage[],
+    pmlSystemPrompt?: string,
+    slideWindowSize: number = DEFAULT_HISTORY_TURNS
 ): AsyncGenerator<string, void, unknown> {
     const { apiFormat, endpoint, modelId } = resolveProviderRouting(provider);
 
+    // Prepend PML system prompt if provided
+    let withSystem = messages;
+    if (pmlSystemPrompt) {
+        // Remove any existing system message to avoid duplicates
+        const nonSystem = messages.filter((m) => m.role !== 'system');
+        withSystem = [{ role: 'system' as const, content: pmlSystemPrompt }, ...nonSystem];
+    }
+
+    // Apply slide window after system message is in place (system msg is never pruned)
+    const trimmed = trimHistory(withSystem, slideWindowSize);
+
     switch (apiFormat) {
         case 'openai':
-            yield* streamOpenAICompat(endpoint, provider.apiKey, modelId, messages, provider.source);
+            yield* streamOpenAICompat(endpoint, provider.apiKey, modelId, trimmed, provider.source);
             break;
         case 'anthropic':
-            yield* streamAnthropic(endpoint, provider.apiKey, modelId, messages);
+            yield* streamAnthropic(endpoint, provider.apiKey, modelId, trimmed);
             break;
         case 'gemini':
-            yield* streamGemini(provider.apiKey, modelId, messages);
+            yield* streamGemini(provider.apiKey, modelId, trimmed);
             break;
         case 'cohere':
-            yield* streamCohere(endpoint, provider.apiKey, modelId, messages);
+            yield* streamCohere(endpoint, provider.apiKey, modelId, trimmed);
             break;
         default:
             throw new Error(`Unknown API format: ${apiFormat}`);
@@ -62,6 +98,7 @@ async function* streamOpenAICompat(
             model,
             messages,
             stream: true,
+            max_tokens: MAX_OUTPUT_TOKENS,
         }),
     });
 
@@ -94,7 +131,7 @@ async function* streamAnthropic(
 
     const body: Record<string, unknown> = {
         model,
-        max_tokens: 4096,
+        max_tokens: MAX_OUTPUT_TOKENS,
         stream: true,
         messages: chatMessages.map((m) => ({ role: m.role, content: m.content })),
     };
@@ -147,7 +184,7 @@ async function* streamGemini(
     const body: Record<string, unknown> = {
         contents,
         generationConfig: {
-            maxOutputTokens: 8192
+            maxOutputTokens: MAX_OUTPUT_TOKENS
         }
     };
     if (systemInstruction) {

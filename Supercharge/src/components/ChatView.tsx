@@ -6,8 +6,11 @@ import remarkGfm from 'remark-gfm';
 import { sendMessage, type ChatMessage } from '../lib/chatService';
 import { useApiKeyStore, getModelFamily, type ApiProvider } from '../lib/apiKeyStore';
 import { ProviderIcons } from './icons/ProviderIcons';
-
 import { useChatHistory } from '../hooks/useChatHistory';
+import { useAuth } from '../lib/AuthContext';
+import { fetchAllMemory, executeMemoryOp, pruneExpiredNodes } from '../lib/memoryStore';
+import { buildSystemPrompt } from '../lib/promptBuilder';
+import { extractMemoryOp } from '../lib/pmlParser';
 
 interface ChatViewProps {
     provider: ApiProvider | null;
@@ -58,6 +61,9 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
     const { providers, activeProviderId, setActiveProviderId } = useApiKeyStore();
     const { fetchMessages, appendMessage, createChat } = useChatHistory();
     const currentChatIdRef = useRef<string | null>(activeChatId);
+    const { user } = useAuth();
+    const [lastMemoryCount, setLastMemoryCount] = useState<number>(0);
+    const hasPrunedRef = useRef(false);
 
     const [isHistoryLoading, setIsHistoryLoading] = useState(true);
 
@@ -81,6 +87,16 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
         loadMessages();
         return () => { mounted = false; };
     }, [activeChatId, fetchMessages]);
+
+    // Prune expired/stale memory nodes once on mount (fix #2.3)
+    useEffect(() => {
+        if (user?.id && !hasPrunedRef.current) {
+            hasPrunedRef.current = true;
+            pruneExpiredNodes(user.id).catch((err) =>
+                console.warn('[ChatView] Memory prune failed:', err)
+            );
+        }
+    }, [user?.id]);
 
     // Model selector state within chat
     const currentProvider = providers.find(p => p.id === activeProviderId) || provider || providers[0] || null;
@@ -108,6 +124,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
 
     // Send message and stream response
     const doSend = useCallback(async (userText: string, history: ChatMessage[]) => {
+        console.warn('[ChatView] doSend called. user?.id:', user?.id, '| provider:', currentProvider?.family);
         if (!currentProvider) {
             setError('No API provider selected.');
             return;
@@ -169,7 +186,27 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
         animationFrameId = requestAnimationFrame(animateText);
 
         try {
-            const stream = sendMessage(currentProvider, updatedMessages);
+            // ── PML: build system prompt before sending ─────────────────
+            let pmlSystemPrompt: string | undefined;
+            if (user?.id) {
+                try {
+                    const pmlNodes = await fetchAllMemory(user.id);
+                    console.warn('[ChatView] PML: fetched', pmlNodes.length, 'memory nodes for user', user.id);
+                    pmlSystemPrompt = buildSystemPrompt({
+                        nodes: pmlNodes,
+                        userMessage: userText,
+                        provider: currentProvider.family,
+                        conversationLength: updatedMessages.length,
+                    });
+                    console.warn('[ChatView] PML: system prompt built, length:', pmlSystemPrompt.length, 'chars');
+                } catch (pmlErr) {
+                    console.warn('[ChatView] PML prompt build failed, sending without memory:', pmlErr);
+                }
+            } else {
+                console.warn('[ChatView] PML: skipped — no user.id available');
+            }
+
+            const stream = sendMessage(currentProvider, updatedMessages, pmlSystemPrompt, 15);
             let firstChunkReceived = false;
 
             for await (const chunk of stream) {
@@ -192,17 +229,57 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                 await new Promise(r => setTimeout(r, 50));
             }
 
-            // Once stream is complete and animated, set final message state
-            const finalContent = fullStreamingTextRef.current;
+            // ── PML: extract MEMORY_OP from raw response ──────────────
+            const rawResponse = fullStreamingTextRef.current;
+            console.warn('[ChatView] PML: raw response length:', rawResponse.length);
+            console.warn('[ChatView] PML: raw response tail (last 500 chars):', rawResponse.slice(-500));
+            const { displayText, commands } = extractMemoryOp(rawResponse);
+            const finalContent = displayText;
+            console.warn('[ChatView] PML: extracted', commands.length, 'commands, displayText length:', displayText.length);
+
             setMessages((prev) => {
                 const newMsgs = [...prev];
                 newMsgs[newMsgs.length - 1] = { role: 'assistant', content: finalContent };
                 return newMsgs;
             });
 
-            // Persist the complete assistant message
+            // Persist the clean assistant message (no PML)
             if (chatId && finalContent) {
                 await appendMessage(chatId, { role: 'assistant', content: finalContent });
+            }
+
+            // ── PML: persist new memories ──────────────────────────────
+            if (user?.id && commands.length > 0) {
+                try {
+                    const result = await executeMemoryOp(user.id, commands);
+                    setLastMemoryCount(result.written);
+                    if (result.errors.length > 0) {
+                        console.warn('[ChatView] Memory op errors:', result.errors);
+                    }
+                } catch (memErr) {
+                    console.warn('[ChatView] Memory write failed:', memErr);
+                }
+            } else if (user?.id && commands.length === 0 && finalContent) {
+                // Fix #1.1: LLM forgot MEMORY_OP — fire lightweight follow-up
+                try {
+                    const followUpMessages: ChatMessage[] = [
+                        { role: 'user', content: 'Please output only the MEMORY_OP block for your previous response. No other text.' },
+                    ];
+                    let followUpText = '';
+                    const followUpStream = sendMessage(currentProvider, followUpMessages, pmlSystemPrompt, 1);
+                    for await (const chunk of followUpStream) {
+                        followUpText += chunk;
+                    }
+                    const followUp = extractMemoryOp(followUpText);
+                    if (followUp.commands.length > 0) {
+                        const result = await executeMemoryOp(user.id, followUp.commands);
+                        setLastMemoryCount(result.written);
+                    }
+                } catch (followUpErr) {
+                    console.warn('[ChatView] MEMORY_OP follow-up failed:', followUpErr);
+                }
+            } else {
+                setLastMemoryCount(0);
             }
 
         } catch (err: any) {
@@ -221,7 +298,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
             setStreamingText('');
             fullStreamingTextRef.current = '';
         }
-    }, [currentProvider, createChat, appendMessage]);
+    }, [currentProvider, createChat, appendMessage, user?.id]);
 
     // Send initial message on mount
     const hasSentInitialMessageRef = useRef(false);
@@ -355,12 +432,21 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                                                         <span className="text-xs font-medium text-white/50 ml-1">Thinking...</span>
                                                     </div>
                                                 ) : (
-                                                    <ReactMarkdown
-                                                        remarkPlugins={[remarkGfm]}
-                                                        components={AnimatedMarkdownComponents}
-                                                    >
-                                                        {(isStreaming && i === messages.length - 1 ? streamingText : msg.content) + (isStreaming && i === messages.length - 1 ? ' ▍' : '')}
-                                                    </ReactMarkdown>
+                                                    <>
+                                                        <ReactMarkdown
+                                                            remarkPlugins={[remarkGfm]}
+                                                            components={AnimatedMarkdownComponents}
+                                                        >
+                                                            {(isStreaming && i === messages.length - 1 ? streamingText : msg.content) + (isStreaming && i === messages.length - 1 ? ' ▍' : '')}
+                                                        </ReactMarkdown>
+                                                        {/* PML: memory-updated indicator */}
+                                                        {!isStreaming && i === messages.length - 1 && lastMemoryCount > 0 && (
+                                                            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-purple-400/70">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-purple-400/80 shadow-[0_0_6px_rgba(168,85,247,0.4)]" />
+                                                                {lastMemoryCount} {lastMemoryCount === 1 ? 'memory' : 'memories'} saved
+                                                            </div>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
                                         </div>

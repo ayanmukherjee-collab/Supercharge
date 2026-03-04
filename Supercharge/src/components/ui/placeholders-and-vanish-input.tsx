@@ -23,8 +23,8 @@ export function PlaceholdersAndVanishInput({
     onSubmit,
 }: {
     placeholders: string[];
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+    onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onSubmit: (value: string, e?: React.FormEvent<HTMLFormElement>) => void;
 }) {
     const [currentPlaceholder, setCurrentPlaceholder] = useState(0);
 
@@ -168,16 +168,16 @@ export function PlaceholdersAndVanishInput({
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter" && !animating) {
-            vanishAndSubmit();
+            e.preventDefault();
+            handleSubmit();
         }
     };
 
-    const vanishAndSubmit = () => {
+    const vanishAndSubmit = (currentValue: string) => {
         setAnimating(true);
         draw();
 
-        const value = inputRef.current?.value || "";
-        if (value && inputRef.current) {
+        if (currentValue && inputRef.current) {
             const maxX = newDataRef.current.reduce(
                 (prev, current) => (current.x > prev ? current.x : prev),
                 0
@@ -186,10 +186,12 @@ export function PlaceholdersAndVanishInput({
         }
     };
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        vanishAndSubmit();
-        onSubmit && onSubmit(e);
+    const handleSubmit = (e?: React.FormEvent<HTMLFormElement>) => {
+        if (e) e.preventDefault();
+        const currentValue = inputRef.current?.value || "";
+        if (!currentValue.trim() || animating) return;
+        vanishAndSubmit(currentValue);
+        onSubmit && onSubmit(currentValue, e);
     };
     const charCount = value.length;
     const animateFrom = prevLengthRef.current;
@@ -205,7 +207,7 @@ export function PlaceholdersAndVanishInput({
                 "w-full relative max-w-xl mx-auto bg-transparent h-12 rounded-full overflow-hidden transition duration-200",
                 value && "bg-transparent"
             )}
-            onSubmit={handleSubmit}
+            onSubmit={(e) => handleSubmit(e)}
         >
             <style>{slideUpStyle}</style>
             <canvas

@@ -21,7 +21,6 @@ function App() {
     const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
     const [pendingMessage, setPendingMessage] = useState('')
     const [activeChatId, setActiveChatId] = useState<string | null>(null)
-    const [inputValue, setInputValue] = useState('')
     const dropdownRef = useRef<HTMLDivElement>(null)
 
     // Auto-select first provider if none selected
@@ -48,17 +47,10 @@ function App() {
         "Life lessons from kratos",
     ];
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setInputValue(e.target.value);
-    };
-
-    const onSubmit = (e?: React.FormEvent<HTMLFormElement>) => {
+    const onSubmit = (value: string, e?: React.FormEvent<HTMLFormElement>) => {
         if (e && e.preventDefault) e.preventDefault();
 
-        // We now rely purely on tracking the inputValue state since reading DOM elements synchronously 
-        // through synthetic events can sometimes be problematic 
-        const value = inputValue.trim();
-        if (!value) return;
+        if (!value.trim()) return;
 
         if (!selectedProvider) {
             // No API key configured — go to settings
@@ -66,10 +58,9 @@ function App() {
             return;
         }
 
-        setPendingMessage(value);
+        setPendingMessage(value.trim());
         setActiveChatId(null);
         setView('chat');
-        setInputValue('');
     };
 
     if (loading) {
@@ -273,7 +264,6 @@ function App() {
                                 <div className="flex-1 overflow-hidden w-full">
                                     <PlaceholdersAndVanishInput
                                         placeholders={placeholders}
-                                        onChange={handleChange}
                                         onSubmit={onSubmit}
                                     />
                                 </div>
