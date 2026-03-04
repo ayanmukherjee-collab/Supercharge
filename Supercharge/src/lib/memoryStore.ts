@@ -1,24 +1,12 @@
 /**
  * memoryStore.ts
  * Handles all Supabase reads/writes for PML memory_nodes.
- *
- * Issues addressed:
- *  #2.1 — STORE/UPDATE confusion → auto-upgrade STORE to UPDATE when node exists
- *  #2.3 — TTL pruning            → pruneExpiredNodes() marks stale by ttl / #st age
- *  #2.4 — PATCH history cap      → cap at 50 entries; aggregate old entries as _summary
- *  #2.5 — Node count cap         → getNodeCount() surfaces active count to callers
- *  #3.1 — Race conditions        → optimistic locking via version integer
- *  #3.2 — Session desync         → fetchAllMemory() always re-fetches from Supabase
- *  #4.1 — Memory poisoning       → sanitisePoisoning() blocks injection keywords
- *  #4.3 — Sensitive data         → detectSensitiveData() blocks PII patterns
  */
 
 import { supabase } from './supabase';
 import { PmlNode, parsePmlLine } from './pmlParser';
 
-// ─────────────────────────────────────────────
 // INTERNAL: Type for a raw memory_nodes row
-// ─────────────────────────────────────────────
 
 interface MemoryRow {
     id: string;
@@ -37,9 +25,7 @@ interface MemoryRow {
     updated_at: string;
 }
 
-// ─────────────────────────────────────────────
-// INTERNAL: Row → PmlNode mapper
-// ─────────────────────────────────────────────
+// Row → PmlNode mapper
 
 function rowToNode(row: MemoryRow): PmlNode {
     return {
@@ -60,11 +46,9 @@ function rowToNode(row: MemoryRow): PmlNode {
     };
 }
 
-// ─────────────────────────────────────────────
-// INTERNAL: Security / Sanitisation helpers
-// ─────────────────────────────────────────────
+// Security / Sanitisation helpers
 
-/** PML command injection keywords — issue #4.1 */
+/** PML command injection keywords */
 const POISON_COMMAND_WORDS = ['STORE', 'UPDATE', 'DELETE', 'PATCH', 'RECALL'];
 const POISON_PHRASES = ['ignore instructions', 'override', 'system access'];
 
@@ -72,7 +56,6 @@ const POISON_PHRASES = ['ignore instructions', 'override', 'system access'];
  * Returns true (and logs) if the item value contains memory-poisoning patterns.
  * Uses word-boundary matching for PML commands to avoid false positives
  * on normal English words (e.g. "store" → food store, "update" → status update).
- * Fix for issue #4.1.
  */
 function sanitisePoisoning(item: string, nodeId: string): boolean {
     // Check PML command words with word boundaries (must look like actual commands)
@@ -97,7 +80,7 @@ function sanitisePoisoning(item: string, nodeId: string): boolean {
     return false;
 }
 
-/** PII patterns — issue #4.3 */
+/** PII patterns */
 const SENSITIVE_PATTERNS: RegExp[] = [
     /\b\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4}\b/, // credit/debit card
     /\b\d{3}-\d{2}-\d{4}\b/,                     // SSN
@@ -106,19 +89,15 @@ const SENSITIVE_PATTERNS: RegExp[] = [
 
 /**
  * Returns true if any PII pattern is detected in the item value.
- * Fix for issue #4.3.
  */
 function detectSensitiveData(item: string): boolean {
     return SENSITIVE_PATTERNS.some((re) => re.test(item));
 }
 
-// ─────────────────────────────────────────────
 // 1. fetchAllMemory
-// ─────────────────────────────────────────────
 
 /**
  * Fetch all non-stale memory nodes for a user, newest first.
- * Always re-fetches from Supabase to avoid session desync (fix #3.2).
  */
 export async function fetchAllMemory(userId: string): Promise<PmlNode[]> {
     const { data, error } = await supabase
@@ -136,13 +115,10 @@ export async function fetchAllMemory(userId: string): Promise<PmlNode[]> {
     return (data as MemoryRow[]).map(rowToNode);
 }
 
-// ─────────────────────────────────────────────
-// INTERNAL: Individual command handlers
-// ─────────────────────────────────────────────
+// Individual command handlers
 
 /**
  * STORE handler with auto-upgrade to UPDATE when the node already exists.
- * Fix for issue #2.1.
  */
 async function handleStore(
     userId: string,
@@ -200,7 +176,7 @@ async function handleStore(
 
 /**
  * UPDATE handler with optimistic locking via version integer.
- * Retries once on version mismatch. Fix for issue #3.1.
+ * Retries once on version mismatch.
  */
 async function handleUpdate(
     userId: string,
@@ -250,7 +226,7 @@ async function handleUpdate(
     // count === 0 means version mismatch — another writer beat us
     if (count === 0) {
         if (attempt < 2) {
-            // Retry once after 200ms (fix #3.1)
+            // Retry once after 200ms
             await new Promise((r) => setTimeout(r, 200));
             return handleUpdate(userId, node, errors, attempt + 1);
         }
@@ -264,7 +240,6 @@ async function handleUpdate(
 /**
  * PATCH handler — appends a timestamped entry to the item history.
  * Caps at 50 entries; aggregates old entries as _summary metadata.
- * Fix for issue #2.4.
  */
 async function handlePatch(
     userId: string,
@@ -299,7 +274,7 @@ async function handlePatch(
     // Append new entry
     history.push({ item: node.item, metadata: node.metadata, t: now });
 
-    // Cap at 50 entries (fix #2.4)
+    // Cap at 50 entries
     if (history.length > 50) {
         const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const oldEntries = history.filter((e) => e.t < cutoff);
@@ -422,9 +397,7 @@ async function handleDelete(
     return 'written';
 }
 
-// ─────────────────────────────────────────────
 // 2. executeMemoryOp
-// ─────────────────────────────────────────────
 
 export interface MemoryOpResult {
     written: number;
@@ -499,13 +472,10 @@ export async function executeMemoryOp(
     return { written, skipped, errors };
 }
 
-// ─────────────────────────────────────────────
 // 3. pruneExpiredNodes
-// ─────────────────────────────────────────────
 
 /**
  * Soft-delete nodes whose TTL has passed, and all #st (State) nodes older than 24 hours.
- * Fixes issue #2.3.
  * Returns the total count of nodes marked stale.
  */
 export async function pruneExpiredNodes(userId: string): Promise<number> {
@@ -554,14 +524,10 @@ export async function pruneExpiredNodes(userId: string): Promise<number> {
     return pruned;
 }
 
-// ─────────────────────────────────────────────
 // 4. getNodeCount
-// ─────────────────────────────────────────────
 
 /**
  * Returns the count of active (non-stale) and stale nodes for a user.
- * Callers can use this to enforce the 500-node hard cap (issue #2.5)
- * and surface a warning in the Memory Explorer.
  */
 export async function getNodeCount(
     userId: string
@@ -591,13 +557,10 @@ export async function getNodeCount(
     };
 }
 
-// ─────────────────────────────────────────────
 // 5. hardDeleteNode
-// ─────────────────────────────────────────────
 
 /**
  * Permanently removes a single memory node from Supabase.
- * Used by the Memory Explorer hard-delete UX flow (fixes issue #5.2).
  * Callers should confirm intent with the user before calling this.
  */
 export async function hardDeleteNode(

@@ -1,14 +1,14 @@
 import type { ApiProvider } from './apiKeyStore';
 import { resolveProviderRouting } from './apiKeyStore';
 
-// ── Types ──────────────────────────────────────────────────────
+// Types
 
 export interface ChatMessage {
     role: 'user' | 'assistant' | 'system';
     content: string;
 }
 
-// ── Token management ──────────────────────────────────────────
+// Token management
 
 /** Default conversation turns (user+assistant pairs) to keep in context */
 const DEFAULT_HISTORY_TURNS = 15;
@@ -31,7 +31,7 @@ function trimHistory(messages: ChatMessage[], maxTurns: number = DEFAULT_HISTORY
     return [...systemMsg, ...trimmed];
 }
 
-// ── Main entry point ───────────────────────────────────────────
+// Main entry point
 
 export async function* sendMessage(
     provider: ApiProvider,
@@ -70,7 +70,7 @@ export async function* sendMessage(
     }
 }
 
-// ── Generic OpenAI-Compatible ──────────────────────────────────
+// Generic OpenAI-Compatible
 
 async function* streamOpenAICompat(
     endpoint: string,

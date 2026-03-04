@@ -4,9 +4,7 @@
  * Implements PML v2.0 specification as defined in the Supercharge PRD.
  */
 
-// ─────────────────────────────────────────────
 // 1. TYPE DEFINITIONS
-// ─────────────────────────────────────────────
 
 /** All 10 category hashes supported by PML v2.0 */
 export type PmlCategory =
@@ -69,9 +67,7 @@ export interface PmlNode {
     updatedAt: string;
 }
 
-// ─────────────────────────────────────────────
 // 2. INTERNAL HELPERS
-// ─────────────────────────────────────────────
 
 const VALID_CATEGORIES = new Set<PmlCategory>([
     'pf', 'ac', 'fc', 'en', 'lc', 'pl', 'wk', 'hl', 'st', 'ep',
@@ -135,9 +131,7 @@ function parseGlobalMeta(raw: string): GlobalMeta {
     return result;
 }
 
-// ─────────────────────────────────────────────
 // 3. parsePmlLine
-// ─────────────────────────────────────────────
 
 /**
  * Parse a single PML command line into a PmlNode.
@@ -156,7 +150,7 @@ export function parsePmlLine(line: string): PmlNode | null {
     // Skip blanks and comments
     if (!trimmed || trimmed.startsWith('//')) return null;
 
-    // ── Step 1: extract command ──────────────────────────────────────────────
+    // Step 1: extract command
     const commandMatch = trimmed.match(/^([A-Z]+)\s+/);
     if (!commandMatch) return null;
     const rawCommand = commandMatch[1];
@@ -166,7 +160,7 @@ export function parsePmlLine(line: string): PmlNode | null {
     // Remainder after the command
     let rest = trimmed.slice(commandMatch[0].length);
 
-    // ── Step 2: extract #CAT:Path ────────────────────────────────────────────
+    // Step 2: extract #CAT:Path
     const catPathMatch = rest.match(/^#([a-z]{2}):([^\s\[<@^]+)/);
     if (!catPathMatch) return null;
     const rawCategory = catPathMatch[1];
@@ -175,7 +169,7 @@ export function parsePmlLine(line: string): PmlNode | null {
     const path = catPathMatch[2]; // e.g. "fitness.weight" or "person"
     rest = rest.slice(catPathMatch[0].length).trim();
 
-    // ── Step 3: extract [...] payload ───────────────────────────────────────
+    // Step 3: extract [...] payload
     let item = '';
     let metadata: PmlMetadata = {};
 
@@ -188,12 +182,12 @@ export function parsePmlLine(line: string): PmlNode | null {
         rest = rest.slice(bracketMatch[0].length).trim();
     }
 
-    // ── Step 4: extract <global meta> ───────────────────────────────────────
+    // Step 4: extract <global meta>
     const globalMeta = parseGlobalMeta(rest);
     // Strip all angle-bracket groups from rest for further token parsing
     rest = rest.replace(/<[^>]*>/g, '').trim();
 
-    // ── Step 5: extract @LINK references ────────────────────────────────────
+    // Step 5: extract @LINK references
     const links: string[] = [];
     const linkRe = /@([^\s@^]+)/g;
     let linkMatch: RegExpExecArray | null;
@@ -201,14 +195,14 @@ export function parsePmlLine(line: string): PmlNode | null {
         links.push(linkMatch[1]);
     }
 
-    // ── Step 6: extract ^INHERIT ─────────────────────────────────────────────
+    // Step 6: extract ^INHERIT
     let inherits: string | null = null;
     const inheritMatch = rest.match(/\^([^\s^@]+)/);
     if (inheritMatch) {
         inherits = inheritMatch[1];
     }
 
-    // ── Step 7: build deterministic id ──────────────────────────────────────
+    // Step 7: build deterministic id
     const id = `${category}:${path}`;
 
     const now = new Date().toISOString();
@@ -231,14 +225,9 @@ export function parsePmlLine(line: string): PmlNode | null {
     };
 }
 
-// ─────────────────────────────────────────────
 // 4. extractMemoryOp
-// ─────────────────────────────────────────────
 
-/**
- * Regex that matches a PML leak in user-visible text.
- * Based on issue #1.3 in the issues document.
- */
+/** Regex that matches a PML leak in user-visible text. */
 const PML_LEAK_RE = /#[a-z]{2}:[^\s]+\s*\[/g;
 
 /**
@@ -277,15 +266,10 @@ export function extractMemoryOp(llmResponse: string): {
         commands.push(...lines);
     }
 
-    console.log('[pmlParser] extractMemoryOp found', commands.length, 'commands in response of length', llmResponse.length);
-    if (commands.length > 0) {
-        console.log('[pmlParser] Commands:', commands);
-    }
-
     // Remove the entire MEMORY_OP block(s) from display text
     displayText = displayText.replace(/```[\s]*memory_op[\s]*\r?\n[\s\S]*?```/gi, '').trim();
 
-    // Strip any accidental PML leakage from the visible text (issue #1.3)
+    // Strip any accidental PML leakage from the visible text
     // We remove the entire PML expression that starts with #xx:path [
     // by extending the match to the closing bracket
     displayText = displayText.replace(
@@ -302,9 +286,7 @@ export function extractMemoryOp(llmResponse: string): {
     return { displayText, commands };
 }
 
-// ─────────────────────────────────────────────
 // 5. serializePml
-// ─────────────────────────────────────────────
 
 /**
  * Reconstruct a minimal, minified PML string from an array of nodes.
@@ -323,7 +305,7 @@ export function serializePml(nodes: PmlNode[]): string {
     for (const node of nodes) {
         if (node.stale) continue;
 
-        // ── [Item|key:val|key:val] segment ──────────────────────────────────
+        // [Item|key:val|key:val] segment
         let bracketContent = node.item;
         for (const [key, val] of Object.entries(node.metadata)) {
             if (val === '') continue; // omit empty values
@@ -331,7 +313,7 @@ export function serializePml(nodes: PmlNode[]): string {
         }
         const bracketPart = `[${bracketContent}]`;
 
-        // ── <GlobalKey:val> segment ─────────────────────────────────────────
+        // <GlobalKey:val> segment
         let globalPart = '';
         const globalEntries = Object.entries(node.globalMeta).filter(
             ([, val]) => val !== ''
@@ -341,10 +323,10 @@ export function serializePml(nodes: PmlNode[]): string {
             globalPart = `<${inner}>`;
         }
 
-        // ── @link tokens ────────────────────────────────────────────────────
+        // @link tokens
         const linkPart = node.links.map((l) => `@${l}`).join('');
 
-        // ── ^inherit token ──────────────────────────────────────────────────
+        // ^inherit token
         const inheritPart = node.inherits ? `^${node.inherits}` : '';
 
         // Compose final line (no leading command — minified form)
@@ -361,9 +343,7 @@ export function serializePml(nodes: PmlNode[]): string {
     return lines.join('\n');
 }
 
-// ─────────────────────────────────────────────
 // 6. parseRecallQuery
-// ─────────────────────────────────────────────
 
 export interface RecallQuery {
     category: string;
@@ -396,7 +376,7 @@ export function parseRecallQuery(line: string): RecallQuery | null {
     if (!trimmed.startsWith('RECALL ')) return null;
     let rest = trimmed.slice('RECALL '.length).trim();
 
-    // ── #CAT:Path ────────────────────────────────────────────────────────────
+    // #CAT:Path
     const catPathMatch = rest.match(/^#([a-z]{2}):([^\s]+)/);
     if (!catPathMatch) return null;
     const category = catPathMatch[1];
@@ -409,35 +389,35 @@ export function parseRecallQuery(line: string): RecallQuery | null {
     let limit: number | undefined;
     let sort: string | undefined;
 
-    // ── SINCE YYYY-MM-DD ─────────────────────────────────────────────────────
+    // SINCE YYYY-MM-DD
     const sinceMatch = rest.match(/\bSINCE\s+(\d{4}-\d{2}-\d{2})\b/);
     if (sinceMatch) {
         since = sinceMatch[1];
         rest = rest.replace(sinceMatch[0], '').trim();
     }
 
-    // ── UNTIL YYYY-MM-DD ─────────────────────────────────────────────────────
+    // UNTIL YYYY-MM-DD
     const untilMatch = rest.match(/\bUNTIL\s+(\d{4}-\d{2}-\d{2})\b/);
     if (untilMatch) {
         until = untilMatch[1];
         rest = rest.replace(untilMatch[0], '').trim();
     }
 
-    // ── LIMIT n ──────────────────────────────────────────────────────────────
+    // LIMIT n
     const limitMatch = rest.match(/\bLIMIT\s+(\d+)\b/);
     if (limitMatch) {
         limit = parseInt(limitMatch[1], 10);
         rest = rest.replace(limitMatch[0], '').trim();
     }
 
-    // ── SORT key:dir ─────────────────────────────────────────────────────────
+    // SORT key:dir
     const sortMatch = rest.match(/\bSORT\s+([^\s]+)\b/);
     if (sortMatch) {
         sort = sortMatch[1];
         rest = rest.replace(sortMatch[0], '').trim();
     }
 
-    // ── WHERE key:val AND/OR key:val ... ─────────────────────────────────────
+    // WHERE key:val AND/OR key:val ...
     // Strip leading WHERE keyword
     const whereMatch = rest.match(/^WHERE\s+(.*)/i);
     if (whereMatch) {

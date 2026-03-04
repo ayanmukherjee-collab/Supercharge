@@ -88,7 +88,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
         return () => { mounted = false; };
     }, [activeChatId, fetchMessages]);
 
-    // Prune expired/stale memory nodes once on mount (fix #2.3)
+    // Prune expired/stale memory nodes once on mount
     useEffect(() => {
         if (user?.id && !hasPrunedRef.current) {
             hasPrunedRef.current = true;
@@ -124,7 +124,6 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
 
     // Send message and stream response
     const doSend = useCallback(async (userText: string, history: ChatMessage[]) => {
-        console.warn('[ChatView] doSend called. user?.id:', user?.id, '| provider:', currentProvider?.family);
         if (!currentProvider) {
             setError('No API provider selected.');
             return;
@@ -186,24 +185,20 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
         animationFrameId = requestAnimationFrame(animateText);
 
         try {
-            // ── PML: build system prompt before sending ─────────────────
+            // PML: build system prompt before sending
             let pmlSystemPrompt: string | undefined;
             if (user?.id) {
                 try {
                     const pmlNodes = await fetchAllMemory(user.id);
-                    console.warn('[ChatView] PML: fetched', pmlNodes.length, 'memory nodes for user', user.id);
                     pmlSystemPrompt = buildSystemPrompt({
                         nodes: pmlNodes,
                         userMessage: userText,
                         provider: currentProvider.family,
                         conversationLength: updatedMessages.length,
                     });
-                    console.warn('[ChatView] PML: system prompt built, length:', pmlSystemPrompt.length, 'chars');
                 } catch (pmlErr) {
                     console.warn('[ChatView] PML prompt build failed, sending without memory:', pmlErr);
                 }
-            } else {
-                console.warn('[ChatView] PML: skipped — no user.id available');
             }
 
             const stream = sendMessage(currentProvider, updatedMessages, pmlSystemPrompt, 15);
@@ -229,13 +224,10 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                 await new Promise(r => setTimeout(r, 50));
             }
 
-            // ── PML: extract MEMORY_OP from raw response ──────────────
+            // PML: extract MEMORY_OP from raw response
             const rawResponse = fullStreamingTextRef.current;
-            console.warn('[ChatView] PML: raw response length:', rawResponse.length);
-            console.warn('[ChatView] PML: raw response tail (last 500 chars):', rawResponse.slice(-500));
             const { displayText, commands } = extractMemoryOp(rawResponse);
             const finalContent = displayText;
-            console.warn('[ChatView] PML: extracted', commands.length, 'commands, displayText length:', displayText.length);
 
             setMessages((prev) => {
                 const newMsgs = [...prev];
@@ -248,7 +240,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                 await appendMessage(chatId, { role: 'assistant', content: finalContent });
             }
 
-            // ── PML: persist new memories ──────────────────────────────
+            // PML: persist new memories
             if (user?.id && commands.length > 0) {
                 try {
                     const result = await executeMemoryOp(user.id, commands);
@@ -260,7 +252,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                     console.warn('[ChatView] Memory write failed:', memErr);
                 }
             } else if (user?.id && commands.length === 0 && finalContent) {
-                // Fix #1.1: LLM forgot MEMORY_OP — fire lightweight follow-up
+                // LLM forgot MEMORY_OP — fire lightweight follow-up
                 try {
                     const followUpMessages: ChatMessage[] = [
                         { role: 'user', content: 'Please output only the MEMORY_OP block for your previous response. No other text.' },

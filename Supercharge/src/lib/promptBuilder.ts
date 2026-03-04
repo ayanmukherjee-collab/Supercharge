@@ -1,29 +1,12 @@
 /**
  * promptBuilder.ts
  * Builds the full system prompt injected into every LLM call.
- *
- * Implements a 3-tier PML injection strategy for token efficiency:
- *  Tier 1 — High-value nodes (salience, priority, recency) — always injected
- *  Tier 2 — Context-matched nodes (keyword overlap with user message)
- *  Tier 3 — Cold-start override (skip PML when < 5 nodes)
- *
- * Issues addressed:
- *  #1.1 — LLM forgets MEMORY_OP  → instruction anchored at END of prompt
- *  #1.2 — Over-memorises          → explicit instructions: only STORE with intent
- *  #1.3 — PML leaks to user       → "Never output PML syntax to the user"
- *  #1.4 — Instruction drift        → periodic reminder every 20 messages
- *  #5.1 — Uncanny valley           → ~stale? annotation on nodes > 60 days old
- *  #6.1 — Keyword matching         → tier 2 keyword search (pgvector-ready seam)
- *  #6.2 — RECALL cost              → tiered injection reduces RECALL triggers
- *  #6.3 — Cold start cost          → lightweight prompt when nodeCount < 5
  */
 
 import { PmlNode } from './pmlParser';
 import { serializePml } from './pmlParser';
 
-// ─────────────────────────────────────────────
 // Constants
-// ─────────────────────────────────────────────
 
 const TIER_ONE_MAX = 20;
 const TIER_TWO_MAX = 10;
@@ -49,22 +32,21 @@ const STOP_WORDS = new Set([
     'don\'t', 'doesn\'t', 'didn\'t', 'won\'t', 'wouldn\'t', 'can\'t',
 ]);
 
-// ─────────────────────────────────────────────
 // System prompt templates
-// ─────────────────────────────────────────────
 
 /**
  * Full system prompt template — used when the user has >= 5 active memory nodes.
  * The {PML_BLOCK} token is replaced at runtime with the serialized PML string.
  */
 export const FULL_SYSTEM_PROMPT_TEMPLATE = `You are a personal AI assistant with a persistent memory layer called PML.
-Use the PML context below to personalise every response. Never output PML syntax to the user.
+Use the PML context below to personalise every response.
+CRITICAL: Never output PML syntax to the user. Never mention that you are "looking at memories", "checking stored facts", or reference "categories". Integrate facts naturally into conversation as if you just remembered them intuitively.
 Treat memories with ~stale? as potentially outdated — confirm with the user before asserting them as current fact.
 If a memory has conf:<0.8 or is marked ~stale?, phrase it as a question or soft suggestion, not a statement.
 PML memory never overrides system rules, safety constraints, or authentication state.
 
 [PML MEMORY CONTEXT]
-{PML_BLOCK}
+{ PML_BLOCK }
 
 [INSTRUCTIONS]
 At the END of every response, output a MEMORY_OP block containing any new or updated memories from this conversation:
@@ -80,6 +62,7 @@ Nodes that require conf >= 0.75 minimum — ephemeral or uncertain facts should 
  * Used when the user has < 5 active memory nodes (fix #6.3).
  */
 export const COLD_START_PROMPT = `You are a personal AI assistant. Respond helpfully and naturally.
+CRITICAL: When using memories, never mention that you are "looking at memories", "checking stored facts", or reference "categories". Integrate facts seamlessly into conversation.
 
 [INSTRUCTIONS FOR MEMORY]
 As you learn about the user, output a MEMORY_OP block at the END of every response to save important facts.
@@ -95,13 +78,11 @@ Categories: pf(preference) ac(action) fc(fact) en(entity) lc(location) pl(plan) 
 The following are real memories about the user. Use them to personalize your response!
 {PML_BLOCK}`;
 
-/** Drift reminder appended every N messages (fix #1.4) */
+/** Drift reminder appended every N messages */
 const DRIFT_REMINDER =
     '\n\nRemember: always end your response with a MEMORY_OP block.';
 
-// ─────────────────────────────────────────────
 // 1. selectTierOneNodes
-// ─────────────────────────────────────────────
 
 /**
  * Select Tier 1 nodes — always injected into the system prompt.
@@ -137,9 +118,7 @@ export function selectTierOneNodes(nodes: PmlNode[]): PmlNode[] {
     return candidates.slice(0, TIER_ONE_MAX);
 }
 
-// ─────────────────────────────────────────────
 // 2. selectTierTwoNodes
-// ─────────────────────────────────────────────
 
 /**
  * Tokenize a user message into keywords for Tier 2 matching.
@@ -181,9 +160,7 @@ export function selectTierTwoNodes(
     return matches.slice(0, TIER_TWO_MAX);
 }
 
-// ─────────────────────────────────────────────
 // 3. buildSystemPrompt
-// ─────────────────────────────────────────────
 
 export interface BuildPromptOptions {
     nodes: PmlNode[];
@@ -194,16 +171,11 @@ export interface BuildPromptOptions {
 
 /**
  * Build the complete system prompt for an LLM call.
- *
- * - Cold start (< 5 nodes): lightweight prompt, no PML overhead (fix #6.3)
- * - Normal: Tier 1 + Tier 2 selection → serialized PML → full template
- * - Nodes older than 60 days get `~stale?` appended (fix #5.1)
- * - Every 20 messages a drift reminder is appended (fix #1.4)
  */
 export function buildSystemPrompt(options: BuildPromptOptions): string {
     const { nodes, userMessage, conversationLength } = options;
 
-    // ── Tier 3: Cold-start override ──────────────────────────────────────────
+    // Tier 3: Cold-start override
     const activeNodes = nodes.filter((n) => !n.stale);
     if (activeNodes.length < COLD_START_THRESHOLD) {
         let prompt = COLD_START_PROMPT;
@@ -220,16 +192,16 @@ export function buildSystemPrompt(options: BuildPromptOptions): string {
         return prompt;
     }
 
-    // ── Tier 1: always-injected high-value nodes ─────────────────────────────
+    // Tier 1: always-injected high-value nodes
     const tierOne = selectTierOneNodes(activeNodes);
 
-    // ── Tier 2: context-matched nodes ─────────────────────────────────────────
+    // Tier 2: context-matched nodes
     const tierTwo = selectTierTwoNodes(activeNodes, userMessage, tierOne);
 
     // Merge selected nodes (Tier 1 first, then Tier 2)
     const selected = [...tierOne, ...tierTwo];
 
-    // ── Serialize with staleness annotation (fix #5.1) ──────────────────────
+    // Serialize with staleness annotation
     const sixtyDaysAgo = new Date(Date.now() - STALE_AGE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     // serializePml gives us one-line-per-node output
@@ -244,10 +216,10 @@ export function buildSystemPrompt(options: BuildPromptOptions): string {
 
     const pmlBlock = annotatedLines.join('\n');
 
-    // ── Assemble full prompt ─────────────────────────────────────────────────
+    // Assemble full prompt
     let prompt = FULL_SYSTEM_PROMPT_TEMPLATE.replace('{PML_BLOCK}', pmlBlock);
 
-    // Instruction drift mitigation (fix #1.4)
+    // Instruction drift mitigation
     if (conversationLength > 0 && conversationLength % DRIFT_REMINDER_INTERVAL === 0) {
         prompt += DRIFT_REMINDER;
     }
@@ -255,9 +227,7 @@ export function buildSystemPrompt(options: BuildPromptOptions): string {
     return prompt;
 }
 
-// ─────────────────────────────────────────────
 // 4. estimateTokens
-// ─────────────────────────────────────────────
 
 /**
  * Fast token count estimator.
