@@ -424,7 +424,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                                                             remarkPlugins={[remarkGfm]}
                                                             components={AnimatedMarkdownComponents}
                                                         >
-                                                            {(isStreaming && i === messages.length - 1 ? streamingText : msg.content) + (isStreaming && i === messages.length - 1 ? ' ▍' : '')}
+                                                            {(isStreaming && i === messages.length - 1 ? extractMemoryOp(streamingText).displayText : msg.content) + (isStreaming && i === messages.length - 1 ? ' ▍' : '')}
                                                         </ReactMarkdown>
                                                     </>
                                                 )}

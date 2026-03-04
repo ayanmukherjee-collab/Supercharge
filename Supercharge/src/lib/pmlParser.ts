@@ -248,13 +248,11 @@ export function extractMemoryOp(llmResponse: string): {
     displayText: string;
     commands: string[];
 } {
-    // Match triple-backtick MEMORY_OP block
-    // Flexible: case-insensitive label, optional whitespace/newlines, handles \r\n
-    const memoryOpRe = /```[\s]*memory_op[\s]*\r?\n([\s\S]*?)```/gi;
-
     const commands: string[] = [];
     let displayText = llmResponse;
 
+    // 1. Extract from strict ```MEMORY_OP blocks
+    const memoryOpRe = /```[\s]*memory_op[\s]*\r?\n([\s\S]*?)```/gi;
     let match: RegExpExecArray | null;
     while ((match = memoryOpRe.exec(llmResponse)) !== null) {
         const blockContent = match[1];
@@ -265,22 +263,40 @@ export function extractMemoryOp(llmResponse: string): {
             .filter((l) => l.length > 0 && !l.startsWith('//'));
         commands.push(...lines);
     }
-
     // Remove the entire MEMORY_OP block(s) from display text
-    displayText = displayText.replace(/```[\s]*memory_op[\s]*\r?\n[\s\S]*?```/gi, '').trim();
+    displayText = displayText.replace(/```[\s]*memory_op[\s]*\r?\n[\s\S]*?```/gi, '');
 
-    // Strip any accidental PML leakage from the visible text
-    // We remove the entire PML expression that starts with #xx:path [
-    // by extending the match to the closing bracket
+    // 1.5. Strip incomplete MEMORY_OP opening tags during streaming
+    // This catches the opening ```MEMORY_OP even before the closing ``` arrives
+    displayText = displayText.replace(/```[\s]*memory_op/gi, '');
+
+    // 2. Aggressively extract any bare PML commands the LLM leaked outside of MEMORY_OP
+    // Matches lines starting with STORE/UPDATE/PATCH/DELETE #...
+    const bareCommandRe = /^(STORE|UPDATE|PATCH|DELETE)\s+#[a-z]{2}:[^\s\[<@^]+\s+\[.*$/gim;
+    let bareMatch: RegExpExecArray | null;
+    while ((bareMatch = bareCommandRe.exec(displayText)) !== null) {
+        const cmd = bareMatch[0].trim();
+        if (!commands.includes(cmd)) {
+            commands.push(cmd);
+        }
+    }
+
+    // Remove all found bare commands from the display text
+    displayText = displayText.replace(bareCommandRe, '');
+
+    // 3. Clean up empty codeblocks the LLM might have left behind (e.g., ```\n\n```)
+    // and stray incomplete backticks left behind by stripped tags
+    displayText = displayText.replace(/```[a-zA-Z]*\s*```/g, '');
+    displayText = displayText.replace(/```\s*$/g, '');
+
+    // 4. Strip any accidental partial PML leakage
     displayText = displayText.replace(
         /#[a-z]{2}:[^\s[]+\s*\[[^\]]*\]/g,
         ''
     );
-
-    // Catch remaining partial leaks (no bracket closed on same line)
     displayText = displayText.replace(PML_LEAK_RE, '');
 
-    // Clean up any double spaces or leading/trailing whitespace artifacts
+    // 5. Clean up any double spaces or leading/trailing whitespace artifacts
     displayText = displayText.replace(/\n{3,}/g, '\n\n').trim();
 
     return { displayText, commands };
