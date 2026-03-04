@@ -65,7 +65,7 @@ function App() {
 
     if (loading) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-black">
+            <div className="flex min-h-[100dvh] items-center justify-center bg-black">
                 <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
             </div>
         )
@@ -78,7 +78,7 @@ function App() {
     // ── Settings View ──
     if (view === 'settings') {
         return (
-            <div className="flex flex-col min-h-screen bg-black">
+            <div className="flex flex-col min-h-[100dvh] bg-black">
                 <Sidebar
                     isOpen={isSidebarOpen}
                     onClose={() => setIsSidebarOpen(false)}
@@ -93,7 +93,7 @@ function App() {
     // ── Manage Chats View ──
     if (view === 'manage-chats') {
         return (
-            <div className="flex flex-col min-h-screen bg-black">
+            <div className="flex flex-col min-h-[100dvh] bg-black">
                 <Sidebar
                     isOpen={isSidebarOpen}
                     onClose={() => setIsSidebarOpen(false)}
@@ -115,7 +115,7 @@ function App() {
     // ── Chat View ──
     if (view === 'chat' && (selectedProvider || activeChatId)) {
         return (
-            <div className="flex flex-col h-screen bg-black overflow-hidden relative">
+            <div className="flex flex-col h-[100dvh] bg-black overflow-hidden relative">
                 <Sidebar
                     isOpen={isSidebarOpen}
                     onClose={() => setIsSidebarOpen(false)}
@@ -139,7 +139,7 @@ function App() {
 
     // ── Home View ──
     return (
-        <div className="flex flex-col min-h-screen items-center justify-center p-4 relative overflow-hidden">
+        <div className="flex flex-col min-h-[100dvh] items-center justify-center p-4 relative overflow-hidden">
             <Sidebar
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
@@ -254,14 +254,14 @@ function App() {
                     </div>
 
                     {/* Glowing Input Box */}
-                    <div className="relative w-full rounded-full">
-                        <div className="w-full rounded-full bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-2xl">
-                            <div className="flex items-center gap-3 px-5 py-3">
+                    <div className="relative w-full rounded-[28px]">
+                        <div className="w-full rounded-[28px] bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-2xl transition-all duration-200">
+                            <div className="flex items-center gap-2 px-3 py-1.5 sm:px-5 sm:py-2">
 
 
 
 
-                                <div className="flex-1 overflow-hidden w-full">
+                                <div className="flex-1 w-full relative">
                                     <PlaceholdersAndVanishInput
                                         placeholders={placeholders}
                                         onSubmit={onSubmit}

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Send, Square, ChevronDown, Mic } from 'lucide-react';
+import { ArrowLeft, Send, Square, ChevronDown, Mic, Maximize2, Minimize2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { sendMessage, type ChatMessage } from '../lib/chatService';
@@ -55,7 +55,9 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
     const currentAnimatedLengthRef = useRef(0);
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [showExpandButton, setShowExpandButton] = useState(false);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const abortRef = useRef(false);
     const streamFinishedRef = useRef(false);
     const { providers, activeProviderId, setActiveProviderId } = useApiKeyStore();
@@ -120,6 +122,38 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
     useEffect(() => {
         scrollToBottom();
     }, [messages, scrollToBottom]);
+
+    const [viewportHeight, setViewportHeight] = useState('100dvh');
+
+    useEffect(() => {
+        const visualViewport = window.visualViewport;
+        const updateHeight = () => {
+            if (visualViewport) {
+                setViewportHeight(`${visualViewport.height}px`);
+                setTimeout(scrollToBottom, 50);
+            } else {
+                setViewportHeight(`${window.innerHeight}px`);
+            }
+        };
+
+        updateHeight();
+
+        if (visualViewport) {
+            visualViewport.addEventListener('resize', updateHeight);
+            visualViewport.addEventListener('scroll', updateHeight);
+        } else {
+            window.addEventListener('resize', updateHeight);
+        }
+
+        return () => {
+            if (visualViewport) {
+                visualViewport.removeEventListener('resize', updateHeight);
+                visualViewport.removeEventListener('scroll', updateHeight);
+            } else {
+                window.removeEventListener('resize', updateHeight);
+            }
+        };
+    }, [scrollToBottom]);
 
     // Send message and stream response
     const doSend = useCallback(async (userText: string, history: ChatMessage[]) => {
@@ -296,11 +330,15 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
         }
     }, [isHistoryLoading, initialMessage, doSend, messages]);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         if (!input.trim() || isStreaming) return;
         const text = input;
         setInput('');
+        if (inputRef.current) {
+            inputRef.current.style.height = 'auto'; // Reset height
+        }
+        setIsExpanded(false);
         doSend(text, messages);
     };
 
@@ -311,7 +349,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
     const providerInfo = currentProvider ? getModelFamily(currentProvider.family) : null;
 
     return (
-        <div className="fixed inset-0 flex flex-col bg-black overflow-hidden">
+        <div className="fixed top-0 left-0 w-full flex flex-col bg-black overflow-hidden" style={{ height: viewportHeight }}>
             {/* Background Glow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-white/[0.04] blur-[120px] rounded-full pointer-events-none" />
 
@@ -388,7 +426,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
 
             {/* Messages container - now taking up all space behind the footer */}
             <div className="flex-1 relative z-10 overflow-hidden">
-                <div className="absolute inset-0 overflow-y-auto pt-10 pb-32 px-4 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]">
+                <div className="absolute inset-0 overflow-y-auto pt-10 pb-32 px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div className="max-w-3xl mx-auto space-y-8">
                         <AnimatePresence initial={false}>
                             {messages.map((msg, i) => (
@@ -455,39 +493,76 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
             <div className="absolute bottom-0 left-0 right-0 py-6 px-4 z-20 bg-gradient-to-t from-black via-black/80 to-transparent">
                 <form
                     onSubmit={handleSubmit}
-                    className="max-w-3xl mx-auto flex items-center gap-3 bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-full px-5 py-3 shadow-2xl"
+                    className="relative max-w-3xl mx-auto bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-[28px] shadow-2xl transition-all duration-200 px-4 py-4"
                 >
-                    <input
+                    <textarea
                         ref={inputRef}
-                        type="text"
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        onChange={(e) => {
+                            setInput(e.target.value);
+                            e.target.style.height = 'auto';
+                            const scrollHeight = e.target.scrollHeight;
+                            e.target.style.height = `${Math.min(scrollHeight, 180)}px`;
+                            if (scrollHeight > 35) {
+                                setShowExpandButton(true);
+                            } else if (e.target.value.trim() === '') {
+                                setShowExpandButton(false);
+                            }
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSubmit(e as any);
+                            }
+                        }}
+                        rows={1}
                         placeholder={isStreaming ? 'Waiting for response...' : 'Send a message...'}
                         disabled={isStreaming}
-                        className="flex-1 bg-transparent text-sm text-white/90 placeholder:text-white/30 focus:outline-none disabled:opacity-50"
+                        className="w-full bg-transparent text-[15px] sm:text-base text-white/90 placeholder:text-white/30 focus:outline-none disabled:opacity-50 resize-none p-0 pr-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden leading-relaxed transition-all duration-200 block"
+                        style={{ minHeight: isExpanded ? '50vh' : '26px', maxHeight: isExpanded ? '50vh' : '180px' }}
                     />
-                    {isStreaming ? (
-                        <button
-                            type="button"
-                            onClick={handleStop}
-                            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 text-white/70 transition-colors"
-                        >
-                            <Square className="w-3.5 h-3.5" />
-                        </button>
-                    ) : (
-                        <button
-                            type="submit"
-                            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 text-white/70 transition-colors"
-                        >
-                            {input.trim() ? (
-                                <Send className="w-3.5 h-3.5" />
-                            ) : (
-                                <Mic className="w-3.5 h-3.5" />
-                            )}
-                        </button>
-                    )}
+
+                    <AnimatePresence>
+                        {(showExpandButton || isExpanded) && !isStreaming && (
+                            <motion.button
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.8 }}
+                                type="button"
+                                onClick={() => setIsExpanded(!isExpanded)}
+                                className="absolute top-2.5 right-2.5 w-8 h-8 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-md border border-white/5 hover:bg-white/10 text-white/50 hover:text-white/90 transition-all z-50"
+                                title={isExpanded ? "Minimize" : "Expand"}
+                            >
+                                {isExpanded ? <Minimize2 className="w-[14px] h-[14px]" /> : <Maximize2 className="w-[14px] h-[14px]" />}
+                            </motion.button>
+                        )}
+                    </AnimatePresence>
+
+                    <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 z-50">
+                        {isStreaming ? (
+                            <button
+                                type="button"
+                                onClick={handleStop}
+                                className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 text-white/70 transition-colors"
+                            >
+                                <Square className="w-3.5 h-3.5" />
+                            </button>
+                        ) : (
+                            <button
+                                type="submit"
+                                className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 text-white/70 transition-colors"
+                            >
+                                {input.trim() ? (
+                                    <Send className="w-4 h-4" />
+                                ) : (
+                                    <Mic className="w-4 h-4" />
+                                )}
+                            </button>
+                        )}
+                    </div>
                 </form>
             </div>
+
         </div>
     );
 }

@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Maximize2, Minimize2, Send } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 const slideUpStyle = `
@@ -27,6 +28,8 @@ export function PlaceholdersAndVanishInput({
     onSubmit: (value: string, e?: React.FormEvent<HTMLFormElement>) => void;
 }) {
     const [currentPlaceholder, setCurrentPlaceholder] = useState(0);
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [showExpandButton, setShowExpandButton] = useState(false);
 
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const startAnimation = () => {
@@ -60,10 +63,9 @@ export function PlaceholdersAndVanishInput({
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const newDataRef = useRef<any[]>([]);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const [value, setValue] = useState("");
     const [animating, setAnimating] = useState(false);
-    const prevLengthRef = useRef(0);
 
     const draw = useCallback(() => {
         if (!inputRef.current) return;
@@ -166,14 +168,22 @@ export function PlaceholdersAndVanishInput({
         animateFrame(start);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter" && !animating) {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === "Enter" && !e.shiftKey && !animating) {
             e.preventDefault();
             handleSubmit();
         }
     };
 
     const vanishAndSubmit = (currentValue: string) => {
+        if (currentValue.includes('\n') || currentValue.length > 50) {
+            // Skip vanish animation for long/multi-line text
+            setValue("");
+            setIsExpanded(false);
+            if (inputRef.current) inputRef.current.style.height = 'auto';
+            return;
+        }
+
         setAnimating(true);
         draw();
 
@@ -186,119 +196,106 @@ export function PlaceholdersAndVanishInput({
         }
     };
 
-    const handleSubmit = (e?: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = (e?: React.FormEvent<HTMLFormElement> | React.FormEvent) => {
         if (e) e.preventDefault();
         const currentValue = inputRef.current?.value || "";
         if (!currentValue.trim() || animating) return;
         vanishAndSubmit(currentValue);
-        onSubmit && onSubmit(currentValue, e);
+        onSubmit && onSubmit(currentValue, e as any);
     };
-    const charCount = value.length;
-    const animateFrom = prevLengthRef.current;
-
-    // Update prev length after render
-    useEffect(() => {
-        prevLengthRef.current = value.length;
-    }, [value]);
-
     return (
-        <form
-            className={cn(
-                "w-full relative max-w-xl mx-auto bg-transparent h-12 rounded-full overflow-hidden transition duration-200",
-                value && "bg-transparent"
-            )}
-            onSubmit={(e) => handleSubmit(e)}
-        >
-            <style>{slideUpStyle}</style>
-            <canvas
+        <div className="relative w-full">
+            <form
                 className={cn(
-                    "absolute pointer-events-none  text-base transform scale-50 top-[20%] left-2 sm:left-8 origin-top-left filter invert dark:invert-0 pr-20",
-                    !animating ? "opacity-0" : "opacity-100"
+                    "w-full relative max-w-xl mx-auto bg-transparent transition duration-200 px-4 py-4",
+                    value && "bg-transparent"
                 )}
-                ref={canvasRef}
-            />
-            <input
-                onChange={(e) => {
-                    if (!animating) {
-                        setValue(e.target.value);
-                        onChange && onChange(e);
-                    }
-                }}
-                onKeyDown={handleKeyDown}
-                ref={inputRef}
-                value={value}
-                type="text"
-                className={cn(
-                    "w-full relative text-sm sm:text-base z-50 border-none bg-transparent h-full rounded-full focus:outline-none focus:ring-0 pl-1 caret-white/70",
-                    "text-transparent"
-                )}
-            />
+                onSubmit={(e) => handleSubmit(e)}
+            >
+                <style>{slideUpStyle}</style>
+                <canvas
+                    className={cn(
+                        "absolute pointer-events-none text-base transform scale-50 top-[18px] left-4 origin-top-left filter invert dark:invert-0",
+                        !animating ? "opacity-0" : "opacity-100"
+                    )}
+                    ref={canvasRef}
+                />
+                <textarea
+                    onChange={(e) => {
+                        if (!animating) {
+                            setValue(e.target.value);
+                            e.target.style.height = 'auto';
+                            const scrollHeight = e.target.scrollHeight;
+                            e.target.style.height = `${Math.min(scrollHeight, 180)}px`;
+                            if (scrollHeight > 35) {
+                                setShowExpandButton(true);
+                            } else if (e.target.value.trim() === '') {
+                                setShowExpandButton(false);
+                            }
+                            onChange && onChange(e as any);
+                        }
+                    }}
+                    onKeyDown={handleKeyDown}
+                    ref={inputRef}
+                    value={value}
+                    rows={1}
+                    className={cn(
+                        "w-full bg-transparent text-[15px] sm:text-base z-50 border-none focus:outline-none focus:ring-0 caret-white/70 resize-none p-0 pr-12 leading-relaxed [scrollbar-width:none] [&::-webkit-scrollbar]:hidden transition-all duration-200 block",
+                        animating ? "text-transparent" : "text-textPrimary"
+                    )}
+                    style={{ minHeight: isExpanded ? '50vh' : '26px', maxHeight: isExpanded ? '50vh' : '180px' }}
+                />
 
-            {/* Character overlay with per-char slide-up */}
-            {value && !animating && (
-                <div className="absolute inset-0 flex items-center pointer-events-none pl-1">
-                    <span className="text-sm sm:text-base text-textPrimary whitespace-pre">
-                        {value.split("").map((char, i) => (
-                            <span
-                                key={`${i}-${char}`}
-                                style={
-                                    i >= animateFrom && charCount > animateFrom
-                                        ? {
-                                            display: 'inline-block',
-                                            animation: 'slideUpChar 0.3s ease-out forwards',
-                                        }
-                                        : { display: 'inline-block' }
-                                }
+                <div className="absolute inset-0 flex items-start px-4 py-4 pointer-events-none">
+                    <AnimatePresence mode="wait">
+                        {!value && (
+                            <motion.p
+                                initial={{ y: 5, opacity: 0 }}
+                                key={`current-placeholder-${currentPlaceholder}`}
+                                animate={{ y: 0, opacity: 1 }}
+                                exit={{ y: -15, opacity: 0 }}
+                                transition={{ duration: 0.3, ease: "linear" }}
+                                className="text-textMuted/40 text-[15px] sm:text-base md:text-lg font-medium text-left w-full truncate pr-12"
                             >
-                                {char}
-                            </span>
-                        ))}
-                    </span>
+                                {placeholders[currentPlaceholder]}
+                            </motion.p>
+                        )}
+                    </AnimatePresence>
                 </div>
-            )}
 
-            <div className="absolute inset-0 flex items-center rounded-full pointer-events-none">
-                <AnimatePresence mode="wait">
-                    {!value && (
-                        <motion.p
-                            initial={{
-                                y: 5,
-                                opacity: 0,
-                            }}
-                            key={`current-placeholder-${currentPlaceholder}`}
-                            animate={{
-                                y: 0,
-                                opacity: 1,
-                            }}
-                            exit={{
-                                y: -15,
-                                opacity: 0,
-                            }}
-                            transition={{
-                                duration: 0.3,
-                                ease: "linear",
-                            }}
-                            className="text-textMuted/40 text-base md:text-lg font-medium text-left w-[calc(100%-2rem)] truncate pl-1"
+                {/* Maximize Button - Top Right */}
+                <AnimatePresence>
+                    {(showExpandButton || isExpanded) && !animating && (
+                        <motion.button
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            type="button"
+                            onClick={() => setIsExpanded(!isExpanded)}
+                            className="absolute top-2.5 right-2.5 w-8 h-8 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-md border border-white/5 hover:bg-white/10 text-white/50 hover:text-white/90 transition-all z-50"
+                            title={isExpanded ? "Minimize" : "Expand"}
                         >
-                            {placeholders[currentPlaceholder]}
-                        </motion.p>
+                            {isExpanded ? <Minimize2 className="w-[14px] h-[14px]" /> : <Maximize2 className="w-[14px] h-[14px]" />}
+                        </motion.button>
                     )}
                 </AnimatePresence>
-            </div>
-            {/* Custom Send Icon within Form */}
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center shrink-0 z-50">
-                <button
-                    className="text-textMuted hover:text-white transition-colors flex items-center justify-center bg-transparent border-none p-0 cursor-pointer"
-                    type={value.trim() ? "submit" : "button"}
-                    disabled={animating}
-                >
-                    {value.trim() ? (
-                        <svg className="w-[18px] h-[18px] opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
-                    ) : (
-                        <svg className="w-[18px] h-[18px] opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" /></svg>
-                    )}
-                </button>
-            </div>
-        </form>
+
+                {/* Send Button - Bottom Right */}
+                <div className="absolute bottom-2.5 right-2.5 flex items-center justify-center z-50">
+                    <button
+                        className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
+                        type={value.trim() ? "submit" : "button"}
+                        disabled={animating}
+                    >
+                        {value.trim() ? (
+                            <Send className="w-[17px] h-[17px] opacity-70" />
+                        ) : (
+                            <svg className="w-[17px] h-[17px] opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" /></svg>
+                        )}
+                    </button>
+                </div>
+            </form>
+
+        </div>
     );
 }
