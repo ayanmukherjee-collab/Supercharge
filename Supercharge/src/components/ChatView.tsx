@@ -62,7 +62,6 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
     const { fetchMessages, appendMessage, createChat } = useChatHistory();
     const currentChatIdRef = useRef<string | null>(activeChatId);
     const { user } = useAuth();
-    const [lastMemoryCount, setLastMemoryCount] = useState<number>(0);
     const hasPrunedRef = useRef(false);
 
     const [isHistoryLoading, setIsHistoryLoading] = useState(true);
@@ -244,7 +243,6 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
             if (user?.id && commands.length > 0) {
                 try {
                     const result = await executeMemoryOp(user.id, commands);
-                    setLastMemoryCount(result.written);
                     if (result.errors.length > 0) {
                         console.warn('[ChatView] Memory op errors:', result.errors);
                     }
@@ -264,14 +262,11 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                     }
                     const followUp = extractMemoryOp(followUpText);
                     if (followUp.commands.length > 0) {
-                        const result = await executeMemoryOp(user.id, followUp.commands);
-                        setLastMemoryCount(result.written);
+                        await executeMemoryOp(user.id, followUp.commands);
                     }
                 } catch (followUpErr) {
                     console.warn('[ChatView] MEMORY_OP follow-up failed:', followUpErr);
                 }
-            } else {
-                setLastMemoryCount(0);
             }
 
         } catch (err: any) {
@@ -431,13 +426,6 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                                                         >
                                                             {(isStreaming && i === messages.length - 1 ? streamingText : msg.content) + (isStreaming && i === messages.length - 1 ? ' ▍' : '')}
                                                         </ReactMarkdown>
-                                                        {/* PML: memory-updated indicator */}
-                                                        {!isStreaming && i === messages.length - 1 && lastMemoryCount > 0 && (
-                                                            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-purple-400/70">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-purple-400/80 shadow-[0_0_6px_rgba(168,85,247,0.4)]" />
-                                                                {lastMemoryCount} {lastMemoryCount === 1 ? 'memory' : 'memories'} saved
-                                                            </div>
-                                                        )}
                                                     </>
                                                 )}
                                             </div>
