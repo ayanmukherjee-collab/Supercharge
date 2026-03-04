@@ -80,15 +80,19 @@ Nodes that require conf >= 0.75 minimum — ephemeral or uncertain facts should 
  * Used when the user has < 5 active memory nodes (fix #6.3).
  */
 export const COLD_START_PROMPT = `You are a personal AI assistant. Respond helpfully and naturally.
-As you learn about the user, output a MEMORY_OP block at the END of every response to save important facts:
-\`\`\`MEMORY_OP
-STORE/UPDATE/PATCH/DELETE commands here
-\`\`\`
+
+[INSTRUCTIONS FOR MEMORY]
+As you learn about the user, output a MEMORY_OP block at the END of every response to save important facts.
 Only STORE facts the user stated with clear intent. Do not STORE throwaway remarks.
-Use this format: STORE #CAT:Root.Sub [Item|key:val] <GlobalKey:val>
+
+Format Example (Do not use this example data, it is just for syntax reference):
+\`\`\`MEMORY_OP
+STORE #pf:food.pizza [pizza]
+\`\`\`
 Categories: pf(preference) ac(action) fc(fact) en(entity) lc(location) pl(plan) wk(work) hl(health) st(state) ep(episode).
 
-[PML MEMORY CONTEXT]
+[ACTUAL USER MEMORY]
+The following are real memories about the user. Use them to personalize your response!
 {PML_BLOCK}`;
 
 /** Drift reminder appended every N messages (fix #1.4) */
@@ -207,7 +211,7 @@ export function buildSystemPrompt(options: BuildPromptOptions): string {
             const pmlBlock = serializePml(activeNodes);
             prompt = prompt.replace('{PML_BLOCK}', pmlBlock);
         } else {
-            prompt = prompt.replace('\n\n[PML MEMORY CONTEXT]\n{PML_BLOCK}', '');
+            prompt = prompt.replace('\n\n[ACTUAL USER MEMORY]\nThe following are real memories about the user. Use them to personalize your response!\n{PML_BLOCK}', '');
         }
 
         if (conversationLength > 0 && conversationLength % DRIFT_REMINDER_INTERVAL === 0) {
