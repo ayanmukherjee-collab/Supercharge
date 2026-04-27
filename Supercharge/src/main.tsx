@@ -4,13 +4,16 @@ import App from './App.tsx'
 import './index.css'
 import { ApiKeyStoreProvider } from './lib/apiKeyStore.tsx'
 import { AuthProvider } from './lib/AuthContext.tsx'
+import { ChatHistoryProvider } from './hooks/useChatHistory'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         <AuthProvider>
-            <ApiKeyStoreProvider>
-                <App />
-            </ApiKeyStoreProvider>
+            <ChatHistoryProvider>
+                <ApiKeyStoreProvider>
+                    <App />
+                </ApiKeyStoreProvider>
+            </ChatHistoryProvider>
         </AuthProvider>
     </React.StrictMode>,
 )

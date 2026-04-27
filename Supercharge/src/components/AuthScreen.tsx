@@ -1,5 +1,11 @@
 import React, { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import {
+    createUserWithEmailAndPassword,
+    sendEmailVerification,
+    signInWithEmailAndPassword,
+    signInWithPopup,
+} from 'firebase/auth'
+import { auth, googleProvider } from '../lib/firebase'
 import { useAuth } from '../lib/AuthContext'
 
 export const AuthScreen: React.FC = () => {
@@ -15,13 +21,8 @@ export const AuthScreen: React.FC = () => {
         try {
             setLoading(true)
             setError(null)
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: window.location.origin + window.location.pathname
-                }
-            })
-            if (error) throw error
+            setMessage(null)
+            await signInWithPopup(auth, googleProvider)
         } catch (err: any) {
             setError(err.message || 'An error occurred during Google sign in')
             setLoading(false)
@@ -36,18 +37,11 @@ export const AuthScreen: React.FC = () => {
 
         try {
             if (isLogin) {
-                const { error } = await supabase.auth.signInWithPassword({
-                    email,
-                    password,
-                })
-                if (error) throw error
+                await signInWithEmailAndPassword(auth, email, password)
             } else {
-                const { error } = await supabase.auth.signUp({
-                    email,
-                    password,
-                })
-                if (error) throw error
-                setMessage('Check your email for the confirmation link.')
+                const credential = await createUserWithEmailAndPassword(auth, email, password)
+                await sendEmailVerification(credential.user).catch(() => undefined)
+                setMessage('Account created. Check your inbox if email verification is enabled in Firebase.')
             }
         } catch (err: any) {
             setError(err.message || 'An error occurred during authentication')
@@ -58,7 +52,6 @@ export const AuthScreen: React.FC = () => {
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-black p-4 overflow-hidden relative">
-            {/* Ambient Background */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-white/[0.04] blur-[120px] rounded-full pointer-events-none" />
 
             <div className="w-full max-w-md z-10">
@@ -113,7 +106,7 @@ export const AuthScreen: React.FC = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all"
-                                placeholder="••••••••"
+                                placeholder="........"
                             />
                         </div>
 

@@ -223,15 +223,19 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
             if (user?.id) {
                 try {
                     const pmlNodes = await fetchAllMemory(user.id);
+                    console.log(`[PML] Loaded ${pmlNodes.length} memory nodes for prompt injection`);
                     pmlSystemPrompt = buildSystemPrompt({
                         nodes: pmlNodes,
                         userMessage: userText,
                         provider: currentProvider.family,
                         conversationLength: updatedMessages.length,
                     });
+                    console.log(`[PML] System prompt built (${pmlSystemPrompt.length} chars)`);
                 } catch (pmlErr) {
                     console.warn('[ChatView] PML prompt build failed, sending without memory:', pmlErr);
                 }
+            } else {
+                console.warn('[PML] No user.id — PML memory system is inactive (login required)');
             }
 
             const stream = sendMessage(currentProvider, updatedMessages, pmlSystemPrompt, 15);
@@ -261,6 +265,10 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
             const rawResponse = fullStreamingTextRef.current;
             const { displayText, commands } = extractMemoryOp(rawResponse);
             const finalContent = displayText;
+            console.log(`[PML] Extracted ${commands.length} MEMORY_OP commands from response`);
+            if (commands.length > 0) {
+                console.log('[PML] Commands:', commands);
+            }
 
             setMessages((prev) => {
                 const newMsgs = [...prev];
@@ -277,17 +285,24 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
             if (user?.id && commands.length > 0) {
                 try {
                     const result = await executeMemoryOp(user.id, commands);
+                    console.log(`[PML] Memory write: ${result.written} written, ${result.skipped} skipped`);
                     if (result.errors.length > 0) {
-                        console.warn('[ChatView] Memory op errors:', result.errors);
+                        console.warn('[PML] Memory op errors:', result.errors);
                     }
                 } catch (memErr) {
-                    console.warn('[ChatView] Memory write failed:', memErr);
+                    console.warn('[PML] Memory write failed:', memErr);
                 }
             } else if (user?.id && commands.length === 0 && finalContent) {
-                // LLM forgot MEMORY_OP — fire lightweight follow-up
+                // LLM forgot MEMORY_OP — fire follow-up WITH conversation context
+                console.log('[PML] No MEMORY_OP in response, firing follow-up with conversation context...');
                 try {
+                    // Small delay to avoid rate-limit 503 from the same model
+                    await new Promise(r => setTimeout(r, 1500));
+
                     const followUpMessages: ChatMessage[] = [
-                        { role: 'user', content: 'Please output only the MEMORY_OP block for your previous response. No other text.' },
+                        { role: 'user', content: userText },
+                        { role: 'assistant', content: finalContent },
+                        { role: 'user', content: 'Based on the conversation above, output ONLY the MEMORY_OP block with any facts worth remembering. No other text. Use the format:\n```MEMORY_OP\nSTORE #category:path [item]\n```' },
                     ];
                     let followUpText = '';
                     const followUpStream = sendMessage(currentProvider, followUpMessages, pmlSystemPrompt, 1);
@@ -295,11 +310,13 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                         followUpText += chunk;
                     }
                     const followUp = extractMemoryOp(followUpText);
+                    console.log(`[PML] Follow-up extracted ${followUp.commands.length} commands`);
                     if (followUp.commands.length > 0) {
-                        await executeMemoryOp(user.id, followUp.commands);
+                        const result = await executeMemoryOp(user.id, followUp.commands);
+                        console.log(`[PML] Follow-up write: ${result.written} written, ${result.skipped} skipped`);
                     }
                 } catch (followUpErr) {
-                    console.warn('[ChatView] MEMORY_OP follow-up failed:', followUpErr);
+                    console.warn('[PML] MEMORY_OP follow-up failed:', followUpErr);
                 }
             }
 

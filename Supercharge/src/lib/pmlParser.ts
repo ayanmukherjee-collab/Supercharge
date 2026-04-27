@@ -251,8 +251,10 @@ export function extractMemoryOp(llmResponse: string): {
     const commands: string[] = [];
     let displayText = llmResponse;
 
-    // 1. Extract from strict ```MEMORY_OP blocks
-    const memoryOpRe = /```[\s]*memory_op[\s]*\r?\n([\s\S]*?)```/gi;
+    // 1. Extract from ```MEMORY_OP blocks (resilient to LLM formatting variations)
+    // Handles: ```MEMORY_OP, ``` MEMORY_OP, ```memory_op, ```Memory_Op, etc.
+    // Also handles cases where LLMs omit the newline before closing backticks
+    const memoryOpRe = /`{3,}[\s]*memory[-_]?op[\s]*\r?\n([\s\S]*?)\n?[\s]*`{3,}/gi;
     let match: RegExpExecArray | null;
     while ((match = memoryOpRe.exec(llmResponse)) !== null) {
         const blockContent = match[1];
@@ -264,11 +266,11 @@ export function extractMemoryOp(llmResponse: string): {
         commands.push(...lines);
     }
     // Remove the entire MEMORY_OP block(s) from display text
-    displayText = displayText.replace(/```[\s]*memory_op[\s]*\r?\n[\s\S]*?```/gi, '');
+    displayText = displayText.replace(/`{3,}[\s]*memory[-_]?op[\s]*\r?\n[\s\S]*?\n?[\s]*`{3,}/gi, '');
 
     // 1.5. Strip incomplete MEMORY_OP opening tags during streaming
     // This catches the opening ```MEMORY_OP even before the closing ``` arrives
-    displayText = displayText.replace(/```[\s]*memory_op/gi, '');
+    displayText = displayText.replace(/`{3,}[\s]*memory[-_]?op/gi, '');
 
     // 2. Aggressively extract any bare PML commands the LLM leaked outside of MEMORY_OP
     // Matches lines starting with STORE/UPDATE/PATCH/DELETE #...

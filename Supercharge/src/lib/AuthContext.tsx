@@ -1,77 +1,79 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { Session, User } from '@supabase/supabase-js'
-import { supabase } from './supabase'
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth'
+import { auth } from './firebase'
+
+export interface AppUser {
+    id: string
+    email: string | null
+    displayName: string | null
+    photoURL: string | null
+}
 
 interface AuthContextType {
-    session: Session | null
-    user: User | null
+    user: AppUser | null
+    firebaseUser: FirebaseUser | null
     loading: boolean
     isSkipped: boolean
     skipLogin: () => void
 }
 
 const AuthContext = createContext<AuthContextType>({
-    session: null,
     user: null,
+    firebaseUser: null,
     loading: true,
     isSkipped: false,
     skipLogin: () => { },
 })
 
+const mapUser = (user: FirebaseUser): AppUser => ({
+    id: user.uid,
+    email: user.email,
+    displayName: user.displayName,
+    photoURL: user.photoURL,
+})
+
 export const useAuth = () => useContext(AuthContext)
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [session, setSession] = useState<Session | null>(null)
-    const [user, setUser] = useState<User | null>(null)
+    const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null)
+    const [user, setUser] = useState<AppUser | null>(null)
     const [loading, setLoading] = useState(true)
     const [isSkipped, setIsSkipped] = useState(false)
 
     const skipLogin = () => setIsSkipped(true)
 
     useEffect(() => {
-        let mounted = true;
+        let mounted = true
 
-        // Safety timeout: if Supabase hangs (e.g. invalid URL), stop loading after 5s
         const timeoutId = setTimeout(() => {
-            if (mounted) setLoading(false);
-        }, 5000);
+            if (mounted) setLoading(false)
+        }, 5000)
 
-        // Get initial session
-        supabase.auth.getSession()
-            .then(({ data: { session } }) => {
-                if (mounted) {
-                    setSession(session)
-                    setUser(session?.user ?? null)
-                    setLoading(false)
-                    clearTimeout(timeoutId)
-                }
-            })
-            .catch(() => {
-                if (mounted) {
-                    setLoading(false)
-                    clearTimeout(timeoutId)
-                }
-            });
-
-        // Listen for changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (mounted) {
-                setSession(session)
-                setUser(session?.user ?? null)
+        const unsubscribe = onAuthStateChanged(
+            auth,
+            (nextUser) => {
+                if (!mounted) return
+                setFirebaseUser(nextUser)
+                setUser(nextUser ? mapUser(nextUser) : null)
+                setLoading(false)
+                clearTimeout(timeoutId)
+            },
+            () => {
+                if (!mounted) return
                 setLoading(false)
                 clearTimeout(timeoutId)
             }
-        })
+        )
 
         return () => {
-            mounted = false;
-            subscription.unsubscribe();
-            clearTimeout(timeoutId);
+            mounted = false
+            unsubscribe()
+            clearTimeout(timeoutId)
         }
     }, [])
 
     return (
-        <AuthContext.Provider value={{ session, user, loading, isSkipped, skipLogin }}>
+        <AuthContext.Provider value={{ user, firebaseUser, loading, isSkipped, skipLogin }}>
             {children}
         </AuthContext.Provider>
     )
