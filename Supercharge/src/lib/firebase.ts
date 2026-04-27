@@ -14,23 +14,49 @@ const firebaseConfig = {
 }
 
 const missingConfig = Object.entries(firebaseConfig)
-    .filter(([, value]) => !value)
+    .filter(([key, value]) => key !== 'measurementId' && !value)
     .map(([key]) => key)
 
-if (missingConfig.length > 0) {
-    console.warn(`Missing Firebase environment variables: ${missingConfig.join(', ')}`)
+const fallbackFirebaseConfig = {
+    apiKey: 'missing-api-key',
+    authDomain: 'missing-auth-domain.firebaseapp.com',
+    projectId: 'missing-project-id',
+    storageBucket: 'missing-project-id.appspot.com',
+    messagingSenderId: '000000000000',
+    appId: '1:000000000000:web:0000000000000000000000',
 }
 
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
+const resolvedFirebaseConfig =
+    missingConfig.length > 0
+        ? { ...fallbackFirebaseConfig, measurementId: undefined }
+        : firebaseConfig
+
+if (missingConfig.length > 0) {
+    console.warn(
+        `Missing Firebase environment variables: ${missingConfig.join(', ')}. ` +
+        'Running with safe fallback values so the app does not crash in production.'
+    )
+}
+
+const app = getApps().length > 0 ? getApp() : initializeApp(resolvedFirebaseConfig)
 
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const googleProvider = new GoogleAuthProvider()
 
-// Initialize Analytics conditionally to ensure it is supported in the environment (e.g. not failing in some strict environments)
-export const analytics = typeof window !== 'undefined' ? 
-    isSupported().then(yes => yes ? getAnalytics(app) : null) : 
-    null;
+export const analytics = typeof window !== 'undefined'
+    ? isSupported()
+        .then((supported) => {
+            if (!supported || !firebaseConfig.measurementId || missingConfig.length > 0) {
+                return null
+            }
+            return getAnalytics(app)
+        })
+        .catch((error) => {
+            console.warn('Firebase analytics disabled:', error)
+            return null
+        })
+    : null
 
 setPersistence(auth, browserLocalPersistence).catch((error) => {
     console.warn('Failed to enable Firebase auth persistence:', error)
