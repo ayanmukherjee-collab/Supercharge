@@ -10,7 +10,3 @@ export function getProviderConfig(configId: string): ProviderConfig {
     }
     return config;
 }
-
-export function listProviderConfigs(): ProviderConfig[] {
-    return PROVIDER_CONFIGS;
-}

@@ -3,8 +3,16 @@
 @tailwind utilities;
 
 @layer base {
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
   body {
-    @apply bg-backgroundPrimary text-textPrimary;
+    @apply bg-[#181818] text-textPrimary;
+    background-color: #181818 !important;
     overflow: hidden;
     height: 100vh;
     height: 100dvh;
@@ -27,6 +35,33 @@
 
   .animate-blur-fade {
     animation: blurFadeIn 0.4s ease-out forwards;
+  }
+
+  .chat-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  }
+
+  .chat-scrollbar::-webkit-scrollbar {
+    display: block;
+    width: 10px;
+  }
+
+  .chat-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .chat-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.24);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  .chat-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.34);
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
 }
 

@@ -7,8 +7,8 @@ export default {
     theme: {
         extend: {
             colors: {
-                backgroundPrimary: '#000000',
-                backgroundSurface: '#111111',
+                backgroundPrimary: '#181818',
+                backgroundSurface: '#2d2d2d',
                 accentPrimary: '#FFFFFF',
                 accentSecondary: '#888888',
                 textPrimary: '#FFFFFF',
@@ -17,7 +17,8 @@ export default {
                 error: '#EF4444',
             },
             fontFamily: {
-                sans: ['Inter', 'sans-serif'],
+                sans: ['Poppins', 'sans-serif'],
+                inter: ['Inter', 'sans-serif'],
             },
             animation: {
                 'glow': 'glow 3s linear infinite',

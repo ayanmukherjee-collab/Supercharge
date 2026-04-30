@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Trash2, Search, MessageSquare, AlertTriangle } from 'lucide-react';
 import { useChatHistory } from '../hooks/useChatHistory';
+import { useViewportHeight } from '../hooks/useViewportHeight';
 
 interface ManageChatsProps {
     onBack: () => void;
@@ -17,36 +18,7 @@ export function ManageChats({ onBack, onOpenSidebar, onSelectChat }: ManageChats
     const [selectedChats, setSelectedChats] = useState<Set<string>>(new Set());
     const [isMultiDeleteModalOpen, setIsMultiDeleteModalOpen] = useState(false);
 
-    const [viewportHeight, setViewportHeight] = useState('100dvh');
-
-    useEffect(() => {
-        const visualViewport = window.visualViewport;
-        const updateHeight = () => {
-            if (visualViewport) {
-                setViewportHeight(`${visualViewport.height}px`);
-            } else {
-                setViewportHeight(`${window.innerHeight}px`);
-            }
-        };
-
-        updateHeight();
-
-        if (visualViewport) {
-            visualViewport.addEventListener('resize', updateHeight);
-            visualViewport.addEventListener('scroll', updateHeight);
-        } else {
-            window.addEventListener('resize', updateHeight);
-        }
-
-        return () => {
-            if (visualViewport) {
-                visualViewport.removeEventListener('resize', updateHeight);
-                visualViewport.removeEventListener('scroll', updateHeight);
-            } else {
-                window.removeEventListener('resize', updateHeight);
-            }
-        };
-    }, []);
+    const viewportHeight = useViewportHeight();
 
     const filteredChats = chats.filter((c) =>
         c.title.toLowerCase().includes(searchQuery.toLowerCase())

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react'
+import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from 'react'
 import {
     addDoc,
     getDocs,
@@ -22,12 +22,6 @@ export interface ChatSession {
     created_at: string
 }
 
-export interface DbMessage extends ChatMessage {
-    id: string
-    chat_id: string
-    created_at: string
-}
-
 const asIsoString = (value: unknown): string => {
     if (typeof value === 'string') return value
     if (value && typeof value === 'object' && 'toDate' in value && typeof (value as any).toDate === 'function') {
@@ -39,12 +33,11 @@ const asIsoString = (value: unknown): string => {
 interface ChatHistoryContextType {
     chats: ChatSession[]
     loadingChats: boolean
-    fetchChats: () => Promise<void>
     createChat: (title?: string) => Promise<ChatSession | null>
     deleteChat: (chatId: string) => Promise<void>
-    updateChatTitle: (chatId: string, title: string) => Promise<void>
     fetchMessages: (chatId: string) => Promise<ChatMessage[]>
     appendMessage: (chatId: string, message: ChatMessage) => Promise<void>
+    updateChatTitle: (chatId: string, title: string) => Promise<void>
 }
 
 const ChatHistoryContext = createContext<ChatHistoryContextType | undefined>(undefined)
@@ -84,10 +77,6 @@ export function ChatHistoryProvider({ children }: { children: ReactNode }) {
         return () => unsubscribe()
     }, [user])
 
-    const fetchChats = useCallback(async () => {
-        // Now handled by onSnapshot automatically
-    }, [])
-
     const createChat = useCallback(async (title: string = 'New Chat'): Promise<ChatSession | null> => {
         if (!user) {
             console.error('Cannot create chat: No user logged in')
@@ -111,22 +100,19 @@ export function ChatHistoryProvider({ children }: { children: ReactNode }) {
                 last_message_at: createdAt,
             })
 
-            const chat: ChatSession = {
+            return {
                 id: docRef.id,
                 user_id: user.id,
                 title,
                 created_at: createdAt,
             }
-
-            // Note: We don't need to manually setChats here because the onSnapshot listener will pick it up
-            return chat
         } catch (error) {
             console.error('Error creating chat:', error)
             return null
         }
     }, [user])
 
-    const deleteChat = async (chatId: string) => {
+    const deleteChat = useCallback(async (chatId: string) => {
         if (!user) return
 
         try {
@@ -139,26 +125,10 @@ export function ChatHistoryProvider({ children }: { children: ReactNode }) {
             batch.delete(chatDocRef(user.id, chatId))
             await batch.commit()
 
-            // Note: We don't manually filter chats because onSnapshot listener picks it up
         } catch (error) {
             console.error('Error deleting chat:', error)
         }
-    }
-
-    const updateChatTitle = async (chatId: string, title: string) => {
-        if (!user) return
-
-        try {
-            await updateDoc(chatDocRef(user.id, chatId), {
-                title,
-                updated_at: new Date().toISOString(),
-            })
-
-            // Note: We don't manually map chats because onSnapshot listener picks it up
-        } catch (error) {
-            console.error('Error updating chat title:', error)
-        }
-    }
+    }, [user])
 
     const fetchMessages = useCallback(async (chatId: string): Promise<ChatMessage[]> => {
         if (!user) return []
@@ -199,22 +169,30 @@ export function ChatHistoryProvider({ children }: { children: ReactNode }) {
         }
     }, [user])
 
+    const updateChatTitle = useCallback(async (chatId: string, title: string) => {
+        if (!user) return
+
+        try {
+            await updateDoc(chatDocRef(user.id, chatId), { title })
+        } catch (error) {
+            console.error('Error updating chat title:', error)
+        }
+    }, [user])
+
     return (
         <ChatHistoryContext.Provider
-            value= {{
-        chats,
-            loadingChats,
-            fetchChats,
-            createChat,
-            deleteChat,
-            updateChatTitle,
-            fetchMessages,
-            appendMessage,
-            }
-}
+            value={{
+                chats,
+                loadingChats,
+                createChat,
+                deleteChat,
+                fetchMessages,
+                appendMessage,
+                updateChatTitle,
+            }}
         >
-    { children }
-    </ChatHistoryContext.Provider>
+            {children}
+        </ChatHistoryContext.Provider>
     )
 }
 

@@ -1,11 +1,10 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useOutsideClick } from "../../hooks/use-outside-click";
-import { ArrowLeft, Check, ChevronDown, Eye, EyeOff, Pencil, Plus, Search, Settings2, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Eye, EyeOff, Pencil, Plus, Search, Settings2, Trash2 } from "lucide-react";
 import {
     useApiKeyStore,
     getModelFamily,
-    getPopularFamilies,
     searchFamilies,
     MODEL_FAMILIES,
     type ApiProvider,
@@ -13,7 +12,7 @@ import {
     type ModelFamily,
     type SourceType,
 } from "../../lib/apiKeyStore";
-import { ProviderIcons } from "../icons/ProviderIcons";
+
 
 type AddMode = "choose" | "preset" | "custom";
 type NormalizerId = CustomProviderConfig["normalizer"];
@@ -93,7 +92,7 @@ export function ExpandableCards() {
             <ul className="w-full flex flex-col">
                 {providers.length === 0 && (
                     <div className="py-12 flex flex-col items-center gap-3 text-center">
-                        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center">
                             <Plus className="w-5 h-5 text-white/30" />
                         </div>
                         <div>
@@ -103,19 +102,14 @@ export function ExpandableCards() {
                     </div>
                 )}
 
-                {providers.map((provider, index) => {
-                    const family = getModelFamily(provider.family);
-                    const ProviderIcon = ProviderIcons[family.id as keyof typeof ProviderIcons];
+                {providers.map((provider) => {
                     return (
                         <motion.div
                             layoutId={`card-${provider.id}-${id}`}
                             key={provider.id}
                             onClick={() => setActive(provider)}
-                            className={`py-4 px-2 flex items-center gap-4 hover:bg-white/[0.03] cursor-pointer transition-colors rounded-lg ${index < providers.length - 1 ? "border-b border-white/5" : ""}`}
+                            className="py-4 px-2 flex items-center gap-4 hover:bg-white/[0.03] cursor-pointer transition-colors rounded-lg"
                         >
-                            <div className="shrink-0 flex items-center justify-center">
-                                {ProviderIcon ? <ProviderIcon className="w-5 h-5 text-white" /> : <span className="text-sm font-bold text-white">{family.name[0]}</span>}
-                            </div>
                             <div className="flex-1 min-w-0">
                                 <motion.h3 layoutId={`title-${provider.id}-${id}`} className="font-medium text-white text-sm truncate">
                                     {provider.label}
@@ -133,7 +127,7 @@ export function ExpandableCards() {
 
                 <button
                     onClick={() => setIsAdding(true)}
-                    className="py-4 px-2 flex items-center gap-4 hover:bg-white/[0.03] cursor-pointer transition-all group rounded-lg border-t border-white/5 mt-1"
+                    className="py-4 px-2 flex items-center gap-4 hover:bg-white/[0.03] cursor-pointer transition-all group rounded-lg mt-1"
                 >
                     <div className="w-8 h-8 flex items-center justify-center rounded-lg text-white/30 group-hover:text-white transition-colors">
                         <Plus className="w-4 h-4" />
@@ -164,7 +158,6 @@ function ExpandedProviderCard({
     onDelete: () => void;
 }) {
     const family = getModelFamily(provider.family);
-    const ProviderIcon = ProviderIcons[family.id as keyof typeof ProviderIcons];
     const [label, setLabel] = useState(provider.label);
     const [apiKey, setApiKey] = useState(provider.apiKey);
     const [model, setModel] = useState(provider.model);
@@ -226,23 +219,39 @@ function ExpandedProviderCard({
 
     return (
         <div className="fixed inset-0 grid place-items-center z-[100]">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-            <motion.div layoutId={`card-${provider.id}-${layoutId}`} ref={innerRef} className="relative w-full max-w-[520px] flex flex-col glass rounded-3xl overflow-hidden shadow-2xl m-4 max-h-[90vh]">
+            {/* Transparent backdrop - no blur or dimming */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-transparent" onClick={onClose} />
+            <motion.div layoutId={`card-${provider.id}-${layoutId}`} ref={innerRef} className="relative w-full max-w-[520px] flex flex-col bg-[#1c1c1e]/70 backdrop-blur-3xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl m-4 max-h-[90vh]">
+                {/* macOS Title Bar */}
+                <div className="h-11 bg-white/[0.04] flex items-center px-4 relative select-none shrink-0 border-b border-white/5">
+                    {/* Traffic Lights */}
+                    <div className="flex items-center gap-2 absolute left-4">
+                        <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center group transition-colors">
+                            <svg className="w-2.5 h-2.5 text-black/60 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                        </button>
+                        <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 flex items-center justify-center group transition-colors">
+                            <svg className="w-2.5 h-2.5 text-black/60 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 12h16"/></svg>
+                        </button>
+                        <button className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center group transition-colors">
+                            <svg className="w-2.5 h-2.5 text-black/60 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                        </button>
+                    </div>
+                    {/* Centered Title */}
+                    <motion.div layoutId={`title-${provider.id}-${layoutId}`} className="w-full text-center text-white/60 text-sm font-medium tracking-wide">
+                        {provider.label}
+                    </motion.div>
+                </div>
+
                 <div className="flex-1 flex flex-col overflow-y-auto">
-                    <div className="flex justify-between items-start p-6">
-                        <div>
-                            <motion.h3 layoutId={`title-${provider.id}-${layoutId}`} className="font-medium text-white text-xl">{provider.label}</motion.h3>
-                            <motion.div layoutId={`desc-${provider.id}-${layoutId}`} className="mt-2.5 inline-flex items-center gap-2">
-                                {ProviderIcon ? <ProviderIcon className="w-4 h-4 text-white/90" /> : <span className="text-sm font-bold text-white/90">{family.name[0]}</span>}
-                                <span className="text-sm font-medium text-white/90">{family.name}</span>
-                            </motion.div>
-                        </div>
-                        <motion.button layoutId={`btn-${provider.id}-${layoutId}`} onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0">
-                            <CloseIcon />
-                        </motion.button>
+
+                    {/* Subtitle under title bar */}
+                    <div className="px-6 pt-5 pb-1">
+                        <motion.div layoutId={`desc-${provider.id}-${layoutId}`} className="inline-flex items-center gap-2">
+                            <span className="text-sm font-medium text-white/50">{family.name}</span>
+                        </motion.div>
                     </div>
 
-                    <div className="flex-1 px-6 pb-4 border-t border-white/5 mt-2 pt-4 space-y-4">
+                    <div className="flex-1 px-6 pb-4 mt-2 pt-3 space-y-4">
                         <Field label="Label">
                             <input type="text" value={label} onChange={(event) => setLabel(event.target.value)} className={inputClassName} />
                         </Field>
@@ -288,7 +297,7 @@ function ExpandedProviderCard({
 
                         {source === "custom" && (
                             <>
-                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-4">
+                                <div className="rounded-2xl bg-white/[0.05] p-4 space-y-4">
                                     <div className="flex items-center gap-2 text-sm text-white/80">
                                         <Settings2 className="w-4 h-4" />
                                         <span>Custom transport settings</span>
@@ -328,15 +337,15 @@ function ExpandedProviderCard({
                             </>
                         )}
 
-                        {configError && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">{configError}</div>}
+                        {configError && <div className="bg-red-500/10 rounded-xl px-4 py-3 text-sm text-red-400">{configError}</div>}
 
-                        <button onClick={handleSave} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-medium bg-white/[0.05] hover:bg-white/15 text-white border border-white/5 hover:border-white/10 transition-all">
+                        <button onClick={handleSave} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-white/[0.08] hover:bg-white/15 text-white transition-all">
                             {saved ? <><Check className="w-4 h-4 text-emerald-400" /><span className="text-emerald-400">Saved</span></> : <span>Save Changes</span>}
                         </button>
                     </div>
 
                     <div className="px-6 pb-6 pt-2 mt-auto">
-                        <button onClick={onDelete} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-medium text-red-400/70 hover:text-red-400 hover:bg-red-500/10 border border-white/5 hover:border-red-500/20 transition-all">
+                        <button onClick={onDelete} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all">
                             <Trash2 className="w-4 h-4" />
                             <span>Delete API Key</span>
                         </button>
@@ -370,7 +379,6 @@ function AddModelModal({
     const [normalizer, setNormalizer] = useState<NormalizerId>("openai-chat");
     const [configError, setConfigError] = useState<string | null>(null);
 
-    const popular = useMemo(() => getPopularFamilies(), []);
     const filteredFamilies = search.trim() ? searchFamilies(search).filter((family) => !family.popular && family.id !== "custom") : MODEL_FAMILIES.filter((family) => !family.popular && family.id !== "custom");
 
     const handleSelectFamily = (family: ModelFamily) => {
@@ -441,16 +449,49 @@ function AddModelModal({
 
     return (
         <div className="fixed inset-0 grid place-items-center z-[100]">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-            <motion.div ref={innerRef} initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ type: "spring", damping: 25, stiffness: 200 }} className="relative w-full max-w-[560px] flex flex-col glass rounded-3xl overflow-hidden shadow-2xl m-4 max-h-[88vh]">
+            {/* Transparent backdrop - no blur or dimming */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-transparent" onClick={onClose} />
+            <motion.div ref={innerRef} initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ type: "spring", damping: 25, stiffness: 200 }} className="relative w-full max-w-[560px] flex flex-col bg-[#1c1c1e]/70 backdrop-blur-3xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl m-4 max-h-[88vh]">
+                {/* macOS Title Bar */}
+                <div className="h-11 bg-white/[0.04] flex items-center px-4 relative select-none shrink-0 border-b border-white/5">
+                    <div className="flex items-center gap-2 absolute left-4">
+                        <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center group transition-colors">
+                            <svg className="w-2.5 h-2.5 text-black/60 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                        </button>
+                        <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 flex items-center justify-center group transition-colors">
+                            <svg className="w-2.5 h-2.5 text-black/60 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 12h16"/></svg>
+                        </button>
+                        <button className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center group transition-colors">
+                            <svg className="w-2.5 h-2.5 text-black/60 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                        </button>
+                    </div>
+                    <AnimatePresence mode="wait">
+                        {mode === "choose" && (
+                            <motion.div key="title-choose" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full text-center text-white/60 text-sm font-medium tracking-wide">
+                                Add AI Model
+                            </motion.div>
+                        )}
+                        {mode === "preset" && selectedFamily && (
+                            <motion.div key="title-preset" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full text-center text-white/60 text-sm font-medium tracking-wide">
+                                {selectedFamily.name}
+                            </motion.div>
+                        )}
+                        {mode === "custom" && (
+                            <motion.div key="title-custom" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full text-center text-white/60 text-sm font-medium tracking-wide">
+                                Custom Provider
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+
                 <AnimatePresence mode="wait">
                     {mode === "choose" && (
-                        <ChooseModeStep key="choose" popular={popular} filteredFamilies={filteredFamilies} search={search} onSearchChange={setSearch} onSelectFamily={handleSelectFamily} onSelectCustom={() => {
+                        <ChooseModeStep key="choose" filteredFamilies={filteredFamilies} search={search} onSearchChange={setSearch} onSelectFamily={handleSelectFamily} onSelectCustom={() => {
                             setMode("custom");
                             setLabel("Custom Provider");
                             setShowKey(false);
                             setConfigError(null);
-                        }} onClose={onClose} />
+                        }} />
                     )}
 
                     {mode === "preset" && selectedFamily && (
@@ -503,25 +544,25 @@ function AddModelModal({
 }
 
 function ChooseModeStep({
-    popular,
     filteredFamilies,
     search,
     onSearchChange,
     onSelectFamily,
     onSelectCustom,
-    onClose,
 }: {
-    popular: ModelFamily[];
     filteredFamilies: ModelFamily[];
     search: string;
     onSearchChange: (value: string) => void;
     onSelectFamily: (family: ModelFamily) => void;
     onSelectCustom: () => void;
-    onClose: () => void;
 }) {
     const searchRef = useRef<HTMLInputElement>(null);
+    const [showAll, setShowAll] = useState(false);
+    
     const isSearching = search.trim().length > 0;
     const searchResults = searchFamilies(search).filter((family) => family.id !== "custom");
+    const displayList = isSearching ? searchResults : filteredFamilies;
+    const isExpanded = showAll || isSearching;
 
     useEffect(() => {
         const timeout = setTimeout(() => searchRef.current?.focus(), 200);
@@ -530,73 +571,71 @@ function ChooseModeStep({
 
     return (
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.15 }}>
-            <div className="flex justify-between items-center p-6 pb-4">
-                <h3 className="font-medium text-white text-lg">Add AI Model</h3>
-                <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-all">
-                    <CloseIcon />
-                </button>
-            </div>
-
-            <div className="px-6 pb-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button onClick={onSelectCustom} className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-4 text-left hover:border-white/20 hover:bg-white/[0.08] transition-all">
-                        <div className="flex items-center gap-2 text-white">
-                            <ProviderIcons.custom className="w-5 h-5" />
-                            <span className="font-medium">Custom Provider</span>
-                        </div>
-                        <p className="text-xs text-white/45 mt-2 leading-relaxed">Bring any OpenAI-compatible base URL, endpoint path, model, and headers.</p>
-                    </button>
-
-                    <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
-                        <div className="flex items-center gap-2 text-white/80">
-                            <Star className="w-4 h-4 text-amber-400/70" />
-                            <span className="font-medium text-sm">Preset Providers</span>
-                        </div>
-                        <p className="text-xs text-white/40 mt-2 leading-relaxed">Choose a built-in provider family, then pick official access or OpenRouter where available.</p>
-                    </div>
-                </div>
-            </div>
-
-            {!search.trim() && (
-                <div className="px-6 pb-3">
-                    <div className="flex items-center gap-1.5 mb-2.5">
-                        <Star className="w-3 h-3 text-amber-400/60" />
-                        <span className="text-[10px] uppercase tracking-widest text-white/30 font-semibold">Popular Presets</span>
-                    </div>
-                    <div className="flex gap-2">
-                        {popular.map((family) => (
-                            <button key={family.id} onClick={() => onSelectFamily(family)} className="flex-1 flex flex-col items-center gap-2 py-3 px-2 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-white/10 transition-all group">
-                                <div className="flex items-center justify-center mb-1">
-                                    {ProviderIcons[family.id as keyof typeof ProviderIcons]
-                                        ? ProviderIcons[family.id as keyof typeof ProviderIcons]({ className: "w-6 h-6 text-white" })
-                                        : <span className="text-lg font-bold text-white">{family.name[0]}</span>}
-                                </div>
-                                <div className="text-xs font-medium text-white/70 group-hover:text-white transition-colors text-center">{family.name}</div>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            <div className="px-6 pb-3">
+            <div className="px-6 pt-5 pb-6 space-y-6">
+                {/* Search Bar at the very top */}
                 <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                    <input ref={searchRef} type="text" value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Search preset AI models..." className="w-full bg-white/[0.05] border border-white/10 rounded-full pl-9 pr-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                    <input ref={searchRef} type="text" value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Search preset AI models..." className="w-full bg-white/[0.07] rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none transition-colors" />
                 </div>
-            </div>
 
-            <div className="px-6 pb-6 max-h-[42vh] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]">
-                {!isSearching && <div className="flex items-center gap-1.5 mb-2 mt-1"><span className="text-[10px] uppercase tracking-widest text-white/30 font-semibold">All Preset Models</span></div>}
-                <div className="space-y-0.5">
-                    {(isSearching ? searchResults : filteredFamilies).map((family) => (
-                        <FamilyRow key={family.id} family={family} onSelect={onSelectFamily} />
-                    ))}
-                    {isSearching && searchResults.length === 0 && (
-                        <div className="py-8 text-center">
-                            <p className="text-sm text-white/30">No preset models found</p>
-                            <p className="text-xs text-white/20 mt-1">Try another search, or use a custom provider above.</p>
+                {/* Preset Models List */}
+                <div className="space-y-2.5">
+                    <label className="text-[11px] font-semibold text-white/50 px-1 uppercase tracking-widest">Preset Providers</label>
+                    <div className="space-y-0.5">
+                        {/* Always visible top 3 items */}
+                        {displayList.slice(0, 3).map((family) => (
+                            <FamilyRow key={family.id} family={family} onSelect={onSelectFamily} />
+                        ))}
+                        
+                        {/* Animated remaining items */}
+                        <AnimatePresence>
+                            {isExpanded && (
+                                <motion.div 
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="space-y-0.5 pt-0.5 pb-1 max-h-[35vh] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]">
+                                        {displayList.slice(3).map((family) => (
+                                            <FamilyRow key={family.id} family={family} onSelect={onSelectFamily} />
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                        
+                        {/* Empty state for search */}
+                        {isSearching && displayList.length === 0 && (
+                            <div className="py-6 text-center">
+                                <p className="text-sm text-white/30">No preset models found</p>
+                            </div>
+                        )}
+                        
+                        {/* Show all toggle */}
+                        {!isSearching && displayList.length > 3 && (
+                            <button 
+                                onClick={() => setShowAll(!showAll)}
+                                className="w-full flex items-center justify-center gap-2 py-2.5 mt-1 rounded-xl hover:bg-white/5 text-xs font-medium text-white/40 hover:text-white/70 transition-colors"
+                            >
+                                <span>{showAll ? "Show less" : "Show all"}</span>
+                                <motion.div animate={{ rotate: showAll ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                    <ChevronDown className="w-3 h-3" />
+                                </motion.div>
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Custom Provider at the bottom */}
+                <div className="pt-2">
+                    <button onClick={onSelectCustom} className="w-full rounded-2xl bg-white/[0.04] border border-white/5 p-4 text-left hover:bg-white/[0.08] hover:border-white/10 transition-all">
+                        <div className="flex items-center gap-2 text-white">
+                            <span className="font-medium text-sm">Custom Provider</span>
                         </div>
-                    )}
+                        <p className="text-xs text-white/40 mt-1.5 leading-relaxed">Bring any OpenAI-compatible base URL, endpoint path, model, and headers.</p>
+                    </button>
                 </div>
             </div>
         </motion.div>
@@ -632,23 +671,15 @@ function PresetConfigStep({
     onBack: () => void;
     onSubmit: () => void;
 }) {
-    const ProviderIcon = ProviderIcons[family.id as keyof typeof ProviderIcons];
-
     return (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.15 }}>
-            <div className="flex items-center gap-3 p-6 pb-4">
-                <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-all -ml-1">
+            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+                <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-all">
                     <ArrowLeft className="w-4 h-4" />
                 </button>
-                <div className="flex items-center gap-2.5">
-                    <div className="flex items-center justify-center">
-                        {ProviderIcon ? <ProviderIcon className="w-5 h-5 text-white" /> : <span className="text-sm font-bold text-white">{family.name[0]}</span>}
-                    </div>
-                    <h3 className="font-medium text-white text-lg">{family.name}</h3>
-                </div>
             </div>
 
-            <div className="px-6 pb-6 space-y-4 border-t border-white/5 pt-4">
+            <div className="px-6 pb-6 space-y-4 pt-2">
                 <Field label="Label">
                     <input type="text" value={label} onChange={(event) => onLabelChange(event.target.value)} placeholder={family.name} className={inputClassName} />
                 </Field>
@@ -688,7 +719,7 @@ function PresetConfigStep({
                     </div>
                 </Field>
 
-                <button onClick={onSubmit} disabled={!apiKey.trim()} className="w-full flex items-center justify-center gap-2 py-3 rounded-full text-sm font-medium bg-white text-black hover:bg-white/90 transition-all disabled:opacity-30 disabled:cursor-not-allowed mt-2">
+                <button onClick={onSubmit} disabled={!apiKey.trim()} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium bg-white text-black hover:bg-white/90 transition-all disabled:opacity-30 disabled:cursor-not-allowed mt-2">
                     <Plus className="w-4 h-4" />
                     <span>Add Preset Provider</span>
                 </button>
@@ -740,17 +771,13 @@ function CustomConfigStep({
 }) {
     return (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.15 }}>
-            <div className="flex items-center gap-3 p-6 pb-4">
-                <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-all -ml-1">
+            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+                <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-all">
                     <ArrowLeft className="w-4 h-4" />
                 </button>
-                <div className="flex items-center gap-2.5">
-                    <ProviderIcons.custom className="w-5 h-5 text-white" />
-                    <h3 className="font-medium text-white text-lg">Custom Provider</h3>
-                </div>
             </div>
 
-            <div className="px-6 pb-6 space-y-4 border-t border-white/5 pt-4 overflow-y-auto max-h-[74vh]">
+            <div className="px-6 pb-6 space-y-4 pt-2 overflow-y-auto max-h-[70vh]">
                 <Field label="Label">
                     <input type="text" value={label} onChange={(event) => onLabelChange(event.target.value)} placeholder="My Hosted Model" className={inputClassName} />
                 </Field>
@@ -797,7 +824,7 @@ function CustomConfigStep({
 
                 {configError && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">{configError}</div>}
 
-                <button onClick={onSubmit} className="w-full flex items-center justify-center gap-2 py-3 rounded-full text-sm font-medium bg-white text-black hover:bg-white/90 transition-all mt-2">
+                <button onClick={onSubmit} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium bg-white text-black hover:bg-white/90 transition-all mt-2">
                     <Plus className="w-4 h-4" />
                     <span>Add Custom Provider</span>
                 </button>
@@ -809,11 +836,6 @@ function CustomConfigStep({
 function FamilyRow({ family, onSelect }: { family: ModelFamily; onSelect: (family: ModelFamily) => void }) {
     return (
         <button onClick={() => onSelect(family)} className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-white/5 transition-colors group text-left">
-            <div className="shrink-0 flex items-center justify-center">
-                {ProviderIcons[family.id as keyof typeof ProviderIcons]
-                    ? ProviderIcons[family.id as keyof typeof ProviderIcons]({ className: "w-5 h-5 text-white" })
-                    : <span className="text-sm font-bold text-white">{family.name[0]}</span>}
-            </div>
             <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-white/70 group-hover:text-white transition-colors flex items-center gap-2">
                     {family.name}
@@ -864,27 +886,5 @@ function maskKey(key: string): string {
     return `${key.slice(0, 4)}••••••••${key.slice(-4)}`;
 }
 
-const inputClassName = "w-full bg-white/[0.05] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors";
+const inputClassName = "w-full bg-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none transition-colors";
 const selectClassName = `${inputClassName} appearance-none cursor-pointer`;
-
-const CloseIcon = () => (
-    <motion.svg
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0, transition: { duration: 0.05 } }}
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-4 w-4"
-    >
-        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-        <path d="M18 6l-12 12" />
-        <path d="M6 6l12 12" />
-    </motion.svg>
-);

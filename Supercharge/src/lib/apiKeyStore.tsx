@@ -343,10 +343,6 @@ export function getModelFamily(id: ModelFamilyId): ModelFamily {
     return MODEL_FAMILIES.find((family) => family.id === id) || MODEL_FAMILIES[0];
 }
 
-export function getPopularFamilies(): ModelFamily[] {
-    return MODEL_FAMILIES.filter((family) => family.popular);
-}
-
 export function searchFamilies(query: string): ModelFamily[] {
     const normalizedQuery = query.toLowerCase().trim();
     if (!normalizedQuery) return MODEL_FAMILIES;
@@ -408,10 +404,6 @@ export function resolveProviderRouting(provider: ApiProvider): {
         familyId: family.id,
     };
 }
-
-export const PROVIDER_INFO: Record<string, { name: string; color: string }> = Object.fromEntries(
-    MODEL_FAMILIES.map((family) => [family.id, { name: family.name, color: family.color }])
-);
 
 type Action =
     | { type: 'SET_ALL'; providers: ApiProvider[] }

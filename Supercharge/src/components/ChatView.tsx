@@ -1,22 +1,24 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Send, Square, ChevronDown, Mic, Maximize2, Minimize2 } from 'lucide-react';
+import { Square, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { sendMessage, type ChatMessage } from '../lib/chatService';
-import { useApiKeyStore, getModelFamily, type ApiProvider } from '../lib/apiKeyStore';
-import { ProviderIcons } from './icons/ProviderIcons';
+import { useApiKeyStore, type ApiProvider } from '../lib/apiKeyStore';
+
 import { useChatHistory } from '../hooks/useChatHistory';
+import { useOutsideClick } from '../hooks/use-outside-click';
+import { useViewportHeight } from '../hooks/useViewportHeight';
 import { useAuth } from '../lib/AuthContext';
 import { fetchAllMemory, executeMemoryOp, pruneExpiredNodes } from '../lib/memoryStore';
 import { buildSystemPrompt } from '../lib/promptBuilder';
 import { extractMemoryOp } from '../lib/pmlParser';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 interface ChatViewProps {
     provider: ApiProvider | null;
     initialMessage: string;
     activeChatId: string | null;
-    onBack: () => void;
     onOpenSidebar: () => void;
 }
 
@@ -45,7 +47,8 @@ const AnimatedMarkdownComponents = {
     em: ({ node, ...props }: any) => <em className="italic text-white/90" {...props} />
 };
 
-export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpenSidebar }: ChatViewProps) {
+export function ChatView({ provider, initialMessage, activeChatId, onOpenSidebar }: ChatViewProps) {
+    const MAX_TEXTAREA_HEIGHT = 180;
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isStreaming, setIsStreaming] = useState(false);
@@ -55,18 +58,18 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
     const currentAnimatedLengthRef = useRef(0);
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [showExpandButton, setShowExpandButton] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const abortRef = useRef(false);
     const streamFinishedRef = useRef(false);
     const { providers, activeProviderId, setActiveProviderId } = useApiKeyStore();
-    const { fetchMessages, appendMessage, createChat } = useChatHistory();
+    const { fetchMessages, appendMessage, createChat, updateChatTitle } = useChatHistory();
     const currentChatIdRef = useRef<string | null>(activeChatId);
     const { user } = useAuth();
     const hasPrunedRef = useRef(false);
+    const hasGeneratedTitleRef = useRef(false);
 
     const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+    const [pmlAlertDismissed, setPmlAlertDismissed] = useState(false);
 
     // Initial load of messages if activeChatId is provided
     useEffect(() => {
@@ -75,6 +78,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
             setIsHistoryLoading(true);
             if (activeChatId) {
                 currentChatIdRef.current = activeChatId;
+                hasGeneratedTitleRef.current = true; // existing chat already has a title
                 const dbMessages = await fetchMessages(activeChatId);
                 if (mounted) {
                     setMessages(dbMessages);
@@ -82,6 +86,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
             } else {
                 setMessages([]);
                 currentChatIdRef.current = null;
+                hasGeneratedTitleRef.current = false; // new chat, will need a title
             }
             if (mounted) setIsHistoryLoading(false);
         };
@@ -100,20 +105,10 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
     }, [user?.id]);
 
     // Model selector state within chat
-    const currentProvider = providers.find(p => p.id === activeProviderId) || provider || providers[0] || null;
+    const currentProvider = providers.find((item) => item.id === activeProviderId) || provider || providers[0] || null;
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
     const modelMenuRef = useRef<HTMLDivElement>(null);
-
-    // Close model menu on outside click
-    useEffect(() => {
-        function handleClick(e: MouseEvent) {
-            if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
-                setIsModelMenuOpen(false);
-            }
-        }
-        document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
-    }, []);
+    useOutsideClick(modelMenuRef, () => setIsModelMenuOpen(false));
 
     const scrollToBottom = useCallback(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -123,37 +118,21 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
         scrollToBottom();
     }, [messages, scrollToBottom]);
 
-    const [viewportHeight, setViewportHeight] = useState('100dvh');
+    const resizeInput = useCallback((element: HTMLTextAreaElement | null) => {
+        if (!element) return;
+        element.style.height = 'auto';
+        const nextHeight = Math.min(element.scrollHeight, MAX_TEXTAREA_HEIGHT);
+        element.style.height = `${nextHeight}px`;
+        element.style.overflowY = element.scrollHeight > MAX_TEXTAREA_HEIGHT ? 'auto' : 'hidden';
+    }, []);
+
+    const viewportHeight = useViewportHeight(() => {
+        window.setTimeout(scrollToBottom, 50);
+    });
 
     useEffect(() => {
-        const visualViewport = window.visualViewport;
-        const updateHeight = () => {
-            if (visualViewport) {
-                setViewportHeight(`${visualViewport.height}px`);
-                setTimeout(scrollToBottom, 50);
-            } else {
-                setViewportHeight(`${window.innerHeight}px`);
-            }
-        };
-
-        updateHeight();
-
-        if (visualViewport) {
-            visualViewport.addEventListener('resize', updateHeight);
-            visualViewport.addEventListener('scroll', updateHeight);
-        } else {
-            window.addEventListener('resize', updateHeight);
-        }
-
-        return () => {
-            if (visualViewport) {
-                visualViewport.removeEventListener('resize', updateHeight);
-                visualViewport.removeEventListener('scroll', updateHeight);
-            } else {
-                window.removeEventListener('resize', updateHeight);
-            }
-        };
-    }, [scrollToBottom]);
+        resizeInput(inputRef.current);
+    }, [input, resizeInput]);
 
     // Send message and stream response
     const doSend = useCallback(async (userText: string, history: ChatMessage[]) => {
@@ -281,6 +260,39 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                 await appendMessage(chatId, { role: 'assistant', content: finalContent });
             }
 
+            // Generate a smart title after 5 messages (3 user + 2 assistant)
+            const currentMsgCount = updatedMessages.length + 1; // +1 for the assistant reply
+            if (chatId && !hasGeneratedTitleRef.current && currentMsgCount >= 5) {
+                hasGeneratedTitleRef.current = true;
+                // Fire & forget — don't block the chat
+                (async () => {
+                    try {
+                        const convoSnippet = [...updatedMessages, { role: 'assistant' as const, content: finalContent }]
+                            .slice(0, 6)
+                            .map(m => `${m.role}: ${m.content.slice(0, 200)}`)
+                            .join('\n');
+
+                        const titleMessages: ChatMessage[] = [
+                            { role: 'user', content: `Summarize this conversation in 4-6 words as a short title. Output ONLY the title, nothing else. No quotes, no punctuation at the end.\n\n${convoSnippet}` },
+                        ];
+
+                        let generatedTitle = '';
+                        const titleStream = sendMessage(currentProvider, titleMessages, undefined, 1);
+                        for await (const chunk of titleStream) {
+                            generatedTitle += chunk;
+                        }
+
+                        generatedTitle = generatedTitle.trim().replace(/^["']|["']$/g, '').slice(0, 60);
+                        if (generatedTitle) {
+                            await updateChatTitle(chatId, generatedTitle);
+                            console.log(`[ChatView] Auto-titled chat: "${generatedTitle}"`);
+                        }
+                    } catch (titleErr) {
+                        console.warn('[ChatView] Auto-title generation failed:', titleErr);
+                    }
+                })();
+            }
+
             // PML: persist new memories
             if (user?.id && commands.length > 0) {
                 try {
@@ -336,7 +348,7 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
             setStreamingText('');
             fullStreamingTextRef.current = '';
         }
-    }, [currentProvider, createChat, appendMessage, user?.id]);
+    }, [currentProvider, createChat, appendMessage, updateChatTitle, user?.id]);
 
     // Send initial message on mount
     const hasSentInitialMessageRef = useRef(false);
@@ -353,9 +365,9 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
         const text = input;
         setInput('');
         if (inputRef.current) {
-            inputRef.current.style.height = 'auto'; // Reset height
+            inputRef.current.style.height = '26px';
+            inputRef.current.style.overflowY = 'hidden';
         }
-        setIsExpanded(false);
         doSend(text, messages);
     };
 
@@ -363,88 +375,41 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
         abortRef.current = true;
     };
 
-    const providerInfo = currentProvider ? getModelFamily(currentProvider.family) : null;
-
     return (
-        <div className="fixed top-0 left-0 w-full flex flex-col bg-black overflow-hidden" style={{ height: viewportHeight }}>
-            {/* Background Glow */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-white/[0.04] blur-[120px] rounded-full pointer-events-none" />
-
+        <div className="fixed top-0 left-0 w-full flex flex-col bg-[#181818] overflow-hidden" style={{ height: viewportHeight }}>
             {/* Header */}
-            <header className="h-14 border-b border-white/5 flex items-center px-4 relative z-10 shrink-0">
+            <header className="h-14 flex items-center px-4 relative z-10 shrink-0">
                 <div className="flex items-center gap-2">
                     <button
                         onClick={onOpenSidebar}
-                        className="p-2 -ml-2 rounded-full hover:bg-white/5 transition-colors"
+                        className="p-2 -ml-2 rounded-xl hover:bg-white/5 transition-colors"
                     >
-                        <svg className="w-5 h-5 text-white/80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" strokeWidth="1.5" />
-                            <line x1="9" y1="3" x2="9" y2="21" strokeWidth="1.5" />
-                        </svg>
+                        <img src="/sidebar.svg" alt="Sidebar" className="w-5 h-5 opacity-80" />
                     </button>
 
-                    <button
-                        onClick={onBack}
-                        className="p-2 rounded-full hover:bg-white/5 text-white/70 hover:text-white transition-all"
-                    >
-                        <ArrowLeft className="w-5 h-5" />
-                    </button>
-                    <div className="h-4 w-px bg-white/10 mx-1" />
 
-                    {/* Model selector */}
-                    <div className="relative" ref={modelMenuRef}>
-                        {currentProvider && providerInfo && (
-                            <button
-                                onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-                                className="flex items-center gap-2 text-xs text-white/60 hover:text-white/90 transition-colors py-1.5 px-3 rounded-full hover:bg-white/5"
-                            >
-                                {ProviderIcons[currentProvider.family as keyof typeof ProviderIcons]
-                                    ? ProviderIcons[currentProvider.family as keyof typeof ProviderIcons]({ className: "w-3 h-3 text-white/80" })
-                                    : <span
-                                        className="w-1.5 h-1.5 rounded-full shadow-[0_0_6px_currentColor]"
-                                        style={{ backgroundColor: providerInfo.color }}
-                                    />}
-                                <span className="font-medium">{currentProvider.label}</span>
-                                <ChevronDown className={`w-3 h-3 transition-transform ${isModelMenuOpen ? 'rotate-180' : ''}`} />
-                            </button>
-                        )}
 
-                        {isModelMenuOpen && (
-                            <div className="absolute left-0 top-full mt-1 w-64 bg-[#111111] border border-white/10 rounded-2xl shadow-2xl py-1 z-50">
-                                {providers.map((p) => (
-                                    <button
-                                        key={p.id}
-                                        onClick={() => {
-                                            setActiveProviderId(p.id);
-                                            setIsModelMenuOpen(false);
-                                        }}
-                                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between rounded-full ${currentProvider.id === p.id
-                                            ? 'text-white bg-white/5'
-                                            : 'text-white/60 hover:text-white hover:bg-white/[0.03]'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            {ProviderIcons[p.family as keyof typeof ProviderIcons]
-                                                ? ProviderIcons[p.family as keyof typeof ProviderIcons]({ className: "w-3 h-3 text-white/80" })
-                                                : <span
-                                                    className="w-1.5 h-1.5 rounded-full"
-                                                    style={{ backgroundColor: getModelFamily(p.family).color }}
-                                                />}
-                                            <span>{p.label}</span>
-                                        </div>
-                                        <span className="text-[10px] text-white/30">{p.model}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
                 </div>
             </header>
 
             {/* Messages container - now taking up all space behind the footer */}
             <div className="flex-1 relative z-10 overflow-hidden">
-                <div className="absolute inset-0 overflow-y-auto pt-10 pb-32 px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="absolute inset-0 overflow-y-auto pt-10 pb-40 px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div className="max-w-3xl mx-auto space-y-8">
+                        {/* PML inactive alert for non-signed-in users */}
+                        {!user && !pmlAlertDismissed && (
+                            <div className="flex items-center gap-3 bg-amber-500/[0.06] border border-amber-500/15 rounded-xl px-4 py-3">
+                                <svg className="w-4 h-4 text-amber-400/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                                <p className="flex-1 text-[13px] text-amber-200/70 leading-snug">
+                                    <span className="font-medium text-amber-200/90">PML is inactive.</span> Sign in to enable Persistent Memory across sessions.
+                                </p>
+                                <button onClick={() => setPmlAlertDismissed(true)} className="shrink-0 p-1 rounded-lg hover:bg-white/5 transition-colors">
+                                    <svg className="w-3.5 h-3.5 text-amber-300/50 hover:text-amber-300/80 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+                        )}
                         <AnimatePresence initial={false}>
                             {messages.map((msg, i) => (
                                 <motion.div
@@ -455,25 +420,22 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
                                     className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                 >
                                     {msg.role === 'user' ? (
-                                        <div className="max-w-[80%] bg-white/10 border border-white/10 rounded-2xl rounded-br-md px-4 py-3 text-sm text-white/90 leading-relaxed">
+                                        <div className="max-w-[80%] bg-[#2d2d2d] rounded-2xl rounded-br-sm px-4 py-3 text-sm text-white/90 leading-relaxed shadow-md">
                                             {msg.content}
                                         </div>
                                     ) : (
                                         <div className="max-w-[85%] flex gap-4">
-                                            <div className="w-6 h-6 shrink-0 mt-0.5 flex items-center justify-center">
-                                                {currentProvider && ProviderIcons[currentProvider.family as keyof typeof ProviderIcons]
-                                                    ? ProviderIcons[currentProvider.family as keyof typeof ProviderIcons]({ className: "w-5 h-5 text-white/90" })
-                                                    : providerInfo?.name?.[0] || 'A'}
-                                            </div>
-                                            <div className="text-sm text-white/80 leading-relaxed overflow-hidden">
+                                            <div className="w-6 h-6 shrink-0 mt-0.5 flex items-center justify-center relative">
                                                 {isThinking && i === messages.length - 1 ? (
-                                                    <div className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full animate-pulse mt-0.5">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: '0ms' }} />
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: '150ms' }} />
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: '300ms' }} />
-                                                        <span className="text-xs font-medium text-white/50 ml-1">Thinking...</span>
+                                                    <div className="absolute inset-0 flex items-center justify-center scale-[1.35]">
+                                                        <DotLottieReact src="/brain loading animation.lottie" loop autoplay className="w-full h-full opacity-90" />
                                                     </div>
                                                 ) : (
+                                                    <img src="/favicon.svg" alt="AI" className="w-6 h-6 opacity-90 object-contain" />
+                                                )}
+                                            </div>
+                                            <div className="text-sm text-white/80 leading-relaxed overflow-hidden">
+                                                {isThinking && i === messages.length - 1 ? null : (
                                                     <>
                                                         <ReactMarkdown
                                                             remarkPlugins={[remarkGfm]}
@@ -507,77 +469,100 @@ export function ChatView({ provider, initialMessage, activeChatId, onBack, onOpe
             </div>
 
             {/* Input - localized frosted glass effect on the box only */}
-            <div className="absolute bottom-0 left-0 right-0 py-6 px-4 z-20 bg-gradient-to-t from-black via-black/80 to-transparent">
+            <div className="absolute bottom-0 left-0 right-0 z-20 bg-transparent flex flex-col items-center px-4">
                 <form
                     onSubmit={handleSubmit}
-                    className="relative max-w-3xl mx-auto bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-[28px] shadow-2xl transition-all duration-200 px-4 py-4"
+                    className="relative w-full max-w-3xl rounded-3xl bg-[#2d2d2d] p-5 flex flex-col gap-8 focus-within:ring-1 focus-within:ring-white/10 transition-all shadow-2xl mt-6"
                 >
-                    <textarea
-                        ref={inputRef}
-                        value={input}
-                        onChange={(e) => {
-                            setInput(e.target.value);
-                            e.target.style.height = 'auto';
-                            const scrollHeight = e.target.scrollHeight;
-                            e.target.style.height = `${Math.min(scrollHeight, 180)}px`;
-                            if (scrollHeight > 35) {
-                                setShowExpandButton(true);
-                            } else if (e.target.value.trim() === '') {
-                                setShowExpandButton(false);
-                            }
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSubmit(e as any);
-                            }
-                        }}
-                        rows={1}
-                        placeholder={isStreaming ? 'Waiting for response...' : 'Send a message...'}
-                        disabled={isStreaming}
-                        className="w-full bg-transparent text-[15px] sm:text-base text-white/90 placeholder:text-white/30 focus:outline-none disabled:opacity-50 resize-none p-0 pr-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden leading-relaxed transition-all duration-200 block"
-                        style={{ minHeight: isExpanded ? '50vh' : '26px', maxHeight: isExpanded ? '50vh' : '180px' }}
-                    />
+                    {/* Top Row: Input Field */}
+                    <div className="flex w-full relative">
+                        <textarea
+                            ref={inputRef}
+                            value={input}
+                            onChange={(e) => {
+                                setInput(e.target.value);
+                                resizeInput(e.target);
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSubmit(e as any);
+                                }
+                            }}
+                            rows={1}
+                            placeholder={isStreaming ? 'Waiting for response...' : 'Ask anything...'}
+                            disabled={isStreaming}
+                            className="chat-scrollbar w-full bg-transparent text-[15px] sm:text-base text-white/90 placeholder:text-white/30 focus:outline-none disabled:opacity-50 resize-none overflow-y-auto p-0 leading-relaxed block text-left min-w-0"
+                            style={{ minHeight: '26px', maxHeight: `${MAX_TEXTAREA_HEIGHT}px` }}
+                        />
+                    </div>
 
-                    <AnimatePresence>
-                        {(showExpandButton || isExpanded) && !isStreaming && (
-                            <motion.button
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                type="button"
-                                onClick={() => setIsExpanded(!isExpanded)}
-                                className="absolute top-2.5 right-2.5 w-8 h-8 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-md border border-white/5 hover:bg-white/10 text-white/50 hover:text-white/90 transition-all z-50"
-                                title={isExpanded ? "Minimize" : "Expand"}
-                            >
-                                {isExpanded ? <Minimize2 className="w-[14px] h-[14px]" /> : <Maximize2 className="w-[14px] h-[14px]" />}
-                            </motion.button>
-                        )}
-                    </AnimatePresence>
+                    {/* Bottom Row: Model Selector & Send Button */}
+                    <div className="flex items-center justify-between w-full">
+                        {/* Model Selector */}
+                        <div className="relative flex items-center" ref={modelMenuRef}>
+                            {providers.length > 0 && currentProvider && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+                                        className="flex items-center gap-2 text-sm font-medium text-white/50 hover:text-white/80 transition-colors rounded-lg bg-transparent"
+                                    >
+                                        
+                                        <span>{currentProvider.label}</span>
+                                        <ChevronDown className={`w-3 h-3 transition-transform ${isModelMenuOpen ? 'rotate-180' : ''}`} />
+                                    </button>
 
-                    <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 z-50">
-                        {isStreaming ? (
-                            <button
-                                type="button"
-                                onClick={handleStop}
-                                className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 text-white/70 transition-colors"
-                            >
-                                <Square className="w-3.5 h-3.5" />
-                            </button>
-                        ) : (
-                            <button
-                                type="submit"
-                                className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 text-white/70 transition-colors"
-                            >
-                                {input.trim() ? (
-                                    <Send className="w-4 h-4" />
-                                ) : (
-                                    <Mic className="w-4 h-4" />
-                                )}
-                            </button>
-                        )}
+                                    {isModelMenuOpen && (
+                                        <div className="absolute left-0 top-full mt-3 w-44 bg-[#252525] rounded-xl py-1.5 z-50 shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
+                                            {providers.map((p) => (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setActiveProviderId(p.id)
+                                                        setIsModelMenuOpen(false)
+                                                    }}
+                                                    className={`w-[calc(100%-12px)] mx-1.5 text-left px-3 py-2 text-sm transition-colors flex items-center justify-between rounded-md ${currentProvider.id === p.id
+                                                        ? 'text-white bg-white/10 font-medium'
+                                                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                                                        }`}
+                                                >
+                                                    <span>{p.label}</span>
+                                                    {currentProvider.id === p.id && (
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+
+                        {/* Send Button */}
+                        <div className="shrink-0 flex items-center z-50">
+                            {isStreaming ? (
+                                <button
+                                    type="button"
+                                    onClick={handleStop}
+                                    className="hover:scale-110 transition-transform flex items-center justify-center bg-transparent border-none shrink-0 group"
+                                >
+                                    <Square className="w-[18px] h-[18px] text-white/70 hover:text-white transition-colors" />
+                                </button>
+                            ) : (
+                                <button
+                                    type="submit"
+                                    disabled={!input.trim()}
+                                    className="hover:scale-110 transition-transform disabled:opacity-30 disabled:hover:scale-100 flex items-center justify-center bg-transparent border-none shrink-0 group"
+                                >
+                                    <img src="/send.svg" alt="Send" className="w-[18px] h-[18px] opacity-70 group-hover:opacity-100 transition-opacity" />
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </form>
+                <div className="w-full max-w-3xl h-6 bg-[#181818] shrink-0" />
             </div>
 
         </div>
