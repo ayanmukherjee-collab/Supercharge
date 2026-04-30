@@ -39,7 +39,7 @@ export function ApiSettingsPage({ onBack, onOpenSidebar }: ApiSettingsPageProps)
                 <div className="mb-8">
                     <h2 className="text-2xl font-semibold text-white mb-2">Configure Models</h2>
                     <p className="text-textMuted text-sm">
-                        Manage your connected AI providers, API keys and model preferences.
+                        Manage preset providers, custom endpoints, API keys, and model preferences.
                         Changes are saved automatically to your local session.
                     </p>
                 </div>

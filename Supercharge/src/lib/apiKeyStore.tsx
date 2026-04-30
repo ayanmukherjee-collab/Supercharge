@@ -1,30 +1,32 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, useState, type ReactNode } from 'react';
-
-// ── Types ──────────────────────────────────────────────────────
+import { getProviderConfig } from './providers/registry';
+import type { ProviderConfig } from './providers/schema';
 
 export type ModelFamilyId =
     | 'openai' | 'anthropic' | 'gemini'
     | 'deepseek' | 'mistral' | 'groq' | 'perplexity'
-    | 'xai' | 'cohere' | 'llama' | 'qwen';
+    | 'xai' | 'cohere' | 'llama' | 'qwen' | 'custom';
 
-export type SourceType = 'official' | 'openrouter';
+export type SourceType = 'official' | 'openrouter' | 'custom';
 
-export type ApiFormat = 'openai' | 'anthropic' | 'gemini' | 'cohere';
+export interface CustomProviderConfig {
+    baseUrl: string;
+    chatPath: string;
+    headers: Record<string, string>;
+    normalizer: 'openai-chat' | 'anthropic-chat' | 'gemini-chat' | 'cohere-chat';
+}
 
-/** How to reach a model through a given source (official API vs OpenRouter) */
 export interface SourceConfig {
     sourceType: SourceType;
-    label: string;                     // "Official" or "OpenRouter"
-    apiFormat: ApiFormat;
-    endpoint: string;                  // full URL or proxy path
-    /** Maps family model value → the ID used by this source */
+    label: string;
+    providerConfigId: string;
     modelMap?: Record<string, string>;
     comingSoon?: boolean;
 }
 
 export interface ModelVariant {
-    value: string;   // canonical model id (used as key for modelMap)
-    label: string;   // human label
+    value: string;
+    label: string;
 }
 
 export interface ModelFamily {
@@ -43,14 +45,24 @@ export interface ApiProvider {
     source: SourceType;
     label: string;
     apiKey: string;
-    model: string;       // the canonical model value
+    model: string;
+    custom?: CustomProviderConfig;
 }
 
-// ── Model Families Registry ────────────────────────────────────
-
-const OR = 'https://openrouter.ai/api';  // OpenRouter base
-
 export const MODEL_FAMILIES: ModelFamily[] = [
+    {
+        id: 'custom',
+        name: 'Custom Provider',
+        color: '#94a3b8',
+        popular: false,
+        description: 'OpenAI-compatible custom endpoint',
+        variants: [
+            { value: 'custom-model', label: 'Custom Model' },
+        ],
+        sources: [
+            { sourceType: 'custom', label: 'Custom', providerConfigId: 'openai-compatible-custom' },
+        ],
+    },
     {
         id: 'openai',
         name: 'GPT (OpenAI)',
@@ -67,10 +79,20 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'openai', endpoint: '/api/openai' },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'openai-official' },
             {
-                sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR,
-                modelMap: { 'gpt-4o': 'openai/gpt-4o', 'gpt-4o-mini': 'openai/gpt-4o-mini', 'o3-mini': 'openai/o3-mini', 'o1': 'openai/o1', 'o1-mini': 'openai/o1-mini', 'gpt-4-turbo': 'openai/gpt-4-turbo', 'gpt-3.5-turbo': 'openai/gpt-3.5-turbo' }
+                sourceType: 'openrouter',
+                label: 'OpenRouter',
+                providerConfigId: 'openrouter',
+                modelMap: {
+                    'gpt-4o': 'openai/gpt-4o',
+                    'gpt-4o-mini': 'openai/gpt-4o-mini',
+                    'o3-mini': 'openai/o3-mini',
+                    'o1': 'openai/o1',
+                    'o1-mini': 'openai/o1-mini',
+                    'gpt-4-turbo': 'openai/gpt-4-turbo',
+                    'gpt-3.5-turbo': 'openai/gpt-3.5-turbo',
+                },
             },
         ],
     },
@@ -87,10 +109,17 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'anthropic', endpoint: '/api/anthropic' },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'anthropic-official' },
             {
-                sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR,
-                modelMap: { 'claude-sonnet-4-20250514': 'anthropic/claude-sonnet-4', 'claude-3-5-sonnet-20241022': 'anthropic/claude-3.5-sonnet', 'claude-3-5-haiku-20241022': 'anthropic/claude-3.5-haiku', 'claude-3-opus-20240229': 'anthropic/claude-3-opus' }
+                sourceType: 'openrouter',
+                label: 'OpenRouter',
+                providerConfigId: 'openrouter',
+                modelMap: {
+                    'claude-sonnet-4-20250514': 'anthropic/claude-sonnet-4',
+                    'claude-3-5-sonnet-20241022': 'anthropic/claude-3.5-sonnet',
+                    'claude-3-5-haiku-20241022': 'anthropic/claude-3.5-haiku',
+                    'claude-3-opus-20240229': 'anthropic/claude-3-opus',
+                },
             },
         ],
     },
@@ -107,10 +136,17 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'gemini', endpoint: '' },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'gemini-official' },
             {
-                sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR,
-                modelMap: { 'gemini-2.5-pro': 'google/gemini-2.5-pro-preview', 'gemini-2.5-flash': 'google/gemini-2.5-flash-preview', 'gemini-2.0-flash': 'google/gemini-2.0-flash-001', 'gemini-1.5-pro': 'google/gemini-pro-1.5' }
+                sourceType: 'openrouter',
+                label: 'OpenRouter',
+                providerConfigId: 'openrouter',
+                modelMap: {
+                    'gemini-2.5-pro': 'google/gemini-2.5-pro-preview',
+                    'gemini-2.5-flash': 'google/gemini-2.5-flash-preview',
+                    'gemini-2.0-flash': 'google/gemini-2.0-flash-001',
+                    'gemini-1.5-pro': 'google/gemini-pro-1.5',
+                },
             },
         ],
     },
@@ -125,10 +161,15 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'deepseek-reasoner', label: 'DeepSeek R1' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'openai', endpoint: 'https://api.deepseek.com' },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'deepseek-official' },
             {
-                sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR,
-                modelMap: { 'deepseek-chat': 'deepseek/deepseek-chat', 'deepseek-reasoner': 'deepseek/deepseek-r1-0528:free' }
+                sourceType: 'openrouter',
+                label: 'OpenRouter',
+                providerConfigId: 'openrouter',
+                modelMap: {
+                    'deepseek-chat': 'deepseek/deepseek-chat',
+                    'deepseek-reasoner': 'deepseek/deepseek-r1-0528:free',
+                },
             },
         ],
     },
@@ -145,10 +186,17 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'open-mistral-nemo', label: 'Mistral Nemo' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'openai', endpoint: '/api/mistral' },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'mistral-official' },
             {
-                sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR,
-                modelMap: { 'mistral-large-latest': 'mistralai/mistral-large-latest', 'mistral-small-latest': 'mistralai/mistral-small-latest', 'codestral-latest': 'mistralai/codestral-latest', 'open-mistral-nemo': 'mistralai/mistral-nemo' }
+                sourceType: 'openrouter',
+                label: 'OpenRouter',
+                providerConfigId: 'openrouter',
+                modelMap: {
+                    'mistral-large-latest': 'mistralai/mistral-large-latest',
+                    'mistral-small-latest': 'mistralai/mistral-small-latest',
+                    'codestral-latest': 'mistralai/codestral-latest',
+                    'open-mistral-nemo': 'mistralai/mistral-nemo',
+                },
             },
         ],
     },
@@ -164,10 +212,16 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'llama-3.1-8b', label: 'Llama 3.1 8B' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'openai', endpoint: '', comingSoon: true },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'openai-official', comingSoon: true },
             {
-                sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR,
-                modelMap: { 'llama-3.3-70b': 'meta-llama/llama-3.3-70b-instruct', 'llama-3.1-405b': 'meta-llama/llama-3.1-405b-instruct', 'llama-3.1-8b': 'meta-llama/llama-3.1-8b-instruct' }
+                sourceType: 'openrouter',
+                label: 'OpenRouter',
+                providerConfigId: 'openrouter',
+                modelMap: {
+                    'llama-3.3-70b': 'meta-llama/llama-3.3-70b-instruct',
+                    'llama-3.1-405b': 'meta-llama/llama-3.1-405b-instruct',
+                    'llama-3.1-8b': 'meta-llama/llama-3.1-8b-instruct',
+                },
             },
         ],
     },
@@ -182,10 +236,15 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'qwen-2.5-coder-32b', label: 'Qwen 2.5 Coder 32B' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'openai', endpoint: '', comingSoon: true },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'openai-official', comingSoon: true },
             {
-                sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR,
-                modelMap: { 'qwen-2.5-72b': 'qwen/qwen-2.5-72b-instruct', 'qwen-2.5-coder-32b': 'qwen/qwen-2.5-coder-32b-instruct' }
+                sourceType: 'openrouter',
+                label: 'OpenRouter',
+                providerConfigId: 'openrouter',
+                modelMap: {
+                    'qwen-2.5-72b': 'qwen/qwen-2.5-72b-instruct',
+                    'qwen-2.5-coder-32b': 'qwen/qwen-2.5-coder-32b-instruct',
+                },
             },
         ],
     },
@@ -201,8 +260,8 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'openai', endpoint: '/api/groq' },
-            { sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR, comingSoon: true },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'groq-official' },
+            { sourceType: 'openrouter', label: 'OpenRouter', providerConfigId: 'openrouter', comingSoon: true },
         ],
     },
     {
@@ -217,10 +276,16 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'sonar-reasoning-pro', label: 'Sonar Reasoning Pro' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'openai', endpoint: '/api/perplexity' },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'perplexity-official' },
             {
-                sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR,
-                modelMap: { 'sonar-pro': 'perplexity/sonar-pro', 'sonar': 'perplexity/sonar', 'sonar-reasoning-pro': 'perplexity/sonar-reasoning-pro' }
+                sourceType: 'openrouter',
+                label: 'OpenRouter',
+                providerConfigId: 'openrouter',
+                modelMap: {
+                    'sonar-pro': 'perplexity/sonar-pro',
+                    'sonar': 'perplexity/sonar',
+                    'sonar-reasoning-pro': 'perplexity/sonar-reasoning-pro',
+                },
             },
         ],
     },
@@ -235,10 +300,15 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'grok-2-mini', label: 'Grok-2 Mini' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'openai', endpoint: '/api/xai' },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'xai-official' },
             {
-                sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR,
-                modelMap: { 'grok-2-latest': 'x-ai/grok-2-latest', 'grok-2-mini': 'x-ai/grok-2-mini' }
+                sourceType: 'openrouter',
+                label: 'OpenRouter',
+                providerConfigId: 'openrouter',
+                modelMap: {
+                    'grok-2-latest': 'x-ai/grok-2-latest',
+                    'grok-2-mini': 'x-ai/grok-2-mini',
+                },
             },
         ],
     },
@@ -254,56 +324,94 @@ export const MODEL_FAMILIES: ModelFamily[] = [
             { value: 'command-r-08-2024', label: 'Command R' },
         ],
         sources: [
-            { sourceType: 'official', label: 'Official', apiFormat: 'cohere', endpoint: '/api/cohere' },
+            { sourceType: 'official', label: 'Official', providerConfigId: 'cohere-official' },
             {
-                sourceType: 'openrouter', label: 'OpenRouter', apiFormat: 'openai', endpoint: OR,
-                modelMap: { 'command-a-08-2025': 'cohere/command-a-08-2025', 'command-r-plus-08-2024': 'cohere/command-r-plus-08-2024', 'command-r-08-2024': 'cohere/command-r-08-2024' }
+                sourceType: 'openrouter',
+                label: 'OpenRouter',
+                providerConfigId: 'openrouter',
+                modelMap: {
+                    'command-a-08-2025': 'cohere/command-a-08-2025',
+                    'command-r-plus-08-2024': 'cohere/command-r-plus-08-2024',
+                    'command-r-08-2024': 'cohere/command-r-08-2024',
+                },
             },
         ],
     },
 ];
 
-// ── Lookup helpers ─────────────────────────────────────────────
-
 export function getModelFamily(id: ModelFamilyId): ModelFamily {
-    return MODEL_FAMILIES.find((f) => f.id === id) || MODEL_FAMILIES[0];
+    return MODEL_FAMILIES.find((family) => family.id === id) || MODEL_FAMILIES[0];
 }
 
 export function getPopularFamilies(): ModelFamily[] {
-    return MODEL_FAMILIES.filter((f) => f.popular);
+    return MODEL_FAMILIES.filter((family) => family.popular);
 }
 
 export function searchFamilies(query: string): ModelFamily[] {
-    const q = query.toLowerCase().trim();
-    if (!q) return MODEL_FAMILIES;
+    const normalizedQuery = query.toLowerCase().trim();
+    if (!normalizedQuery) return MODEL_FAMILIES;
+
     return MODEL_FAMILIES.filter(
-        (f) =>
-            f.name.toLowerCase().includes(q) ||
-            f.description.toLowerCase().includes(q) ||
-            f.id.includes(q) ||
-            f.variants.some((v) => v.label.toLowerCase().includes(q))
+        (family) =>
+            family.name.toLowerCase().includes(normalizedQuery) ||
+            family.description.toLowerCase().includes(normalizedQuery) ||
+            family.id.includes(normalizedQuery) ||
+            family.variants.some((variant) => variant.label.toLowerCase().includes(normalizedQuery))
     );
 }
 
-/** Given a saved provider, resolve the actual model ID and source config for the chat service */
 export function resolveProviderRouting(provider: ApiProvider): {
-    apiFormat: ApiFormat;
-    endpoint: string;
-    modelId: string;      // the actual model ID to send to the API
+    config: ProviderConfig;
+    modelId: string;
     familyId: ModelFamilyId;
 } {
+    if (provider.source === 'custom') {
+        if (!provider.custom) {
+            throw new Error(`Custom provider "${provider.label}" is missing its configuration`);
+        }
+
+        return {
+            config: {
+                id: `custom-${provider.id}`,
+                label: provider.label,
+                baseUrl: provider.custom.baseUrl,
+                headers: provider.custom.headers,
+                endpoints: {
+                    chat: { path: provider.custom.chatPath, method: 'POST', responseMode: 'sse' },
+                },
+                requestTemplate: {
+                    chat: {
+                        model: '{model}',
+                        messages: '{messages}',
+                        stream: '{stream}',
+                        max_tokens: '{max_output_tokens}',
+                    },
+                },
+                normalizer: provider.custom.normalizer,
+            },
+            modelId: provider.model,
+            familyId: provider.family,
+        };
+    }
+
     const family = getModelFamily(provider.family);
-    const source = family.sources.find((s) => s.sourceType === provider.source)!;
+    const source = family.sources.find((candidate) => candidate.sourceType === provider.source);
+
+    if (!source) {
+        throw new Error(`No source "${provider.source}" configured for ${family.name}`);
+    }
+
     const modelId = source.modelMap?.[provider.model] ?? provider.model;
-    return { apiFormat: source.apiFormat, endpoint: source.endpoint, modelId, familyId: family.id };
+    return {
+        config: getProviderConfig(source.providerConfigId),
+        modelId,
+        familyId: family.id,
+    };
 }
 
-// Legacy compat: re-export as PROVIDER_INFO for other components
 export const PROVIDER_INFO: Record<string, { name: string; color: string }> = Object.fromEntries(
-    MODEL_FAMILIES.map((f) => [f.id, { name: f.name, color: f.color }])
+    MODEL_FAMILIES.map((family) => [family.id, { name: family.name, color: family.color }])
 );
-
-// ── Reducer ────────────────────────────────────────────────────
 
 type Action =
     | { type: 'SET_ALL'; providers: ApiProvider[] }
@@ -318,15 +426,13 @@ function reducer(state: ApiProvider[], action: Action): ApiProvider[] {
         case 'ADD_PROVIDER':
             return [...state, action.provider];
         case 'UPDATE_PROVIDER':
-            return state.map((p) => (p.id === action.provider.id ? action.provider : p));
+            return state.map((provider) => (provider.id === action.provider.id ? action.provider : provider));
         case 'DELETE_PROVIDER':
-            return state.filter((p) => p.id !== action.id);
+            return state.filter((provider) => provider.id !== action.id);
         default:
             return state;
     }
 }
-
-// ── Storage helpers ────────────────────────────────────────────
 
 const STORAGE_KEY = 'supercharge_api_keys';
 
@@ -334,41 +440,45 @@ function loadProviders(): ApiProvider[] {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return [];
+
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return [];
 
-        return parsed.map((p: any) => {
-            if (p.provider && !p.family) {
-                // Migrate from old format
-                let family = p.provider;
-                let source = 'official';
+        return parsed
+            .map((provider: any) => {
+                if (provider.provider && !provider.family) {
+                    let family = provider.provider;
+                    let source: SourceType = 'official';
 
-                if (p.provider === 'openrouter') {
-                    source = 'openrouter';
-                    if (p.model.includes('deepseek')) family = 'deepseek';
-                    else if (p.model.includes('anthropic')) family = 'anthropic';
-                    else if (p.model.includes('gemini') || p.model.includes('google')) family = 'gemini';
-                    else if (p.model.includes('mistral')) family = 'mistral';
-                    else if (p.model.includes('llama')) family = 'llama';
-                    else if (p.model.includes('qwen')) family = 'qwen';
-                    else family = 'openai';
-                } else if (['together', 'fireworks', 'cerebras', 'sambanova'].includes(p.provider)) {
-                    family = 'llama';
-                } else if (!['openai', 'anthropic', 'gemini', 'deepseek', 'mistral', 'groq', 'perplexity', 'xai', 'cohere', 'llama', 'qwen'].includes(family)) {
-                    family = 'openai';
+                    if (provider.provider === 'openrouter') {
+                        source = 'openrouter';
+                        if (provider.model.includes('deepseek')) family = 'deepseek';
+                        else if (provider.model.includes('anthropic')) family = 'anthropic';
+                        else if (provider.model.includes('gemini') || provider.model.includes('google')) family = 'gemini';
+                        else if (provider.model.includes('mistral')) family = 'mistral';
+                        else if (provider.model.includes('llama')) family = 'llama';
+                        else if (provider.model.includes('qwen')) family = 'qwen';
+                        else family = 'openai';
+                    } else if (['together', 'fireworks', 'cerebras', 'sambanova'].includes(provider.provider)) {
+                        family = 'llama';
+                    } else if (!['openai', 'anthropic', 'gemini', 'deepseek', 'mistral', 'groq', 'perplexity', 'xai', 'cohere', 'llama', 'qwen'].includes(family)) {
+                        family = 'openai';
+                    }
+
+                    return {
+                        id: provider.id,
+                        family,
+                        source,
+                        label: provider.label,
+                        apiKey: provider.apiKey,
+                        model: provider.model,
+                        custom: provider.custom,
+                    } satisfies ApiProvider;
                 }
 
-                return {
-                    id: p.id,
-                    family,
-                    source,
-                    label: p.label,
-                    apiKey: p.apiKey,
-                    model: p.model
-                };
-            }
-            return p;
-        }).filter((p: any) => p.family && p.source);
+                return provider;
+            })
+            .filter((provider: any) => provider.family && provider.source);
     } catch {
         return [];
     }
@@ -377,8 +487,6 @@ function loadProviders(): ApiProvider[] {
 function saveProviders(providers: ApiProvider[]) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(providers));
 }
-
-// ── Context ────────────────────────────────────────────────────
 
 interface ApiKeyStoreContextValue {
     providers: ApiProvider[];
@@ -394,9 +502,7 @@ const ApiKeyStoreContext = createContext<ApiKeyStoreContextValue | null>(null);
 
 export function ApiKeyStoreProvider({ children }: { children: ReactNode }) {
     const [providers, dispatch] = useReducer(reducer, [], loadProviders);
-    const [activeProviderId, setActiveProviderId] = useState<string | null>(() => {
-        return localStorage.getItem('supercharge_active_provider') || null;
-    });
+    const [activeProviderId, setActiveProviderId] = useState<string | null>(() => localStorage.getItem('supercharge_active_provider') || null);
 
     useEffect(() => {
         if (activeProviderId) {
@@ -423,11 +529,11 @@ export function ApiKeyStoreProvider({ children }: { children: ReactNode }) {
 
     const deleteProvider = useCallback((id: string) => {
         dispatch({ type: 'DELETE_PROVIDER', id });
-        setActiveProviderId(prev => prev === id ? null : prev);
+        setActiveProviderId((previous) => (previous === id ? null : previous));
     }, []);
 
     const getProvider = useCallback(
-        (id: string) => providers.find((p) => p.id === id),
+        (id: string) => providers.find((provider) => provider.id === id),
         [providers]
     );
 
@@ -439,7 +545,7 @@ export function ApiKeyStoreProvider({ children }: { children: ReactNode }) {
 }
 
 export function useApiKeyStore() {
-    const ctx = useContext(ApiKeyStoreContext);
-    if (!ctx) throw new Error('useApiKeyStore must be used within ApiKeyStoreProvider');
-    return ctx;
+    const context = useContext(ApiKeyStoreContext);
+    if (!context) throw new Error('useApiKeyStore must be used within ApiKeyStoreProvider');
+    return context;
 }
